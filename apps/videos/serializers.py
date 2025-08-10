@@ -135,14 +135,17 @@ class VideoCommentSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    video_id = serializers.UUIDField(write_only=True, required=False)
+    parent_id = serializers.UUIDField(write_only=True, required=False)
     
     class Meta:
         model = VideoComment
         fields = [
             'id', 'content', 'user', 'parent', 'is_edited',
-            'replies', 'can_edit', 'created_at', 'updated_at'
+            'replies', 'can_edit', 'created_at', 'updated_at',
+            'video_id', 'parent_id'
         ]
-        read_only_fields = ['id', 'user', 'is_edited', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'is_edited', 'created_at', 'updated_at', 'parent']
     
     def get_user(self, obj):
         return {

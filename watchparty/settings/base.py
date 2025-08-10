@@ -55,6 +55,8 @@ LOCAL_APPS = [
     'apps.social',
     'apps.messaging',
     'apps.support',
+    'apps.events',
+    'apps.mobile',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -302,11 +304,102 @@ PUSH_NOTIFICATION_RETRY_ATTEMPTS = config('PUSH_NOTIFICATION_RETRY_ATTEMPTS', de
 # API Documentation
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Watch Party API',
-    'DESCRIPTION': 'API documentation for Watch Party Platform',
+    'DESCRIPTION': '''
+    **Watch Party Platform API Documentation**
+    
+    This is a comprehensive API for the Watch Party platform that allows users to:
+    - Create and join video watch parties
+    - Upload and manage videos
+    - Chat in real-time during parties
+    - Manage user profiles and social features
+    - Access analytics and billing features
+    
+    ## Authentication
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your_access_token>
+    ```
+    
+    ## Rate Limiting
+    API endpoints have rate limiting applied. Check response headers for limit information.
+    
+    ## Pagination
+    List endpoints use cursor-based pagination with `page` and `page_size` parameters.
+    ''',
     'VERSION': '2.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': '/api/',
+    'SCHEMA_PATH_PREFIX_TRIM': True,
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
+    'SERVE_AUTHENTICATION': [],
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': False,
+        'defaultModelsExpandDepth': 1,
+        'defaultModelExpandDepth': 1,
+        'defaultModelRendering': 'example',
+        'displayRequestDuration': True,
+        'docExpansion': 'list',
+        'filter': True,
+        'operationsSorter': 'alpha',
+        'showExtensions': True,
+        'showCommonExtensions': True,
+        'tagsSorter': 'alpha',
+        'tryItOutEnabled': True,
+    },
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
+    'REDOC_UI_SETTINGS': {
+        'hideDownloadButton': False,
+        'hideHostname': False,
+        'hideLoading': False,
+        'hideSchemaPattern': True,
+        'expandResponses': 'all',
+        'pathInMiddlePanel': True,
+        'nativeScrollbars': False,
+        'theme': {
+            'colors': {
+                'primary': {
+                    'main': '#3f51b5'
+                }
+            },
+            'typography': {
+                'fontSize': '14px',
+                'lineHeight': '1.5em',
+                'code': {
+                    'fontSize': '13px'
+                }
+            }
+        }
+    },
+    'SORT_OPERATIONS': True,
+    'DISABLE_ERRORS_AND_WARNINGS': False,
+    'ENUM_NAME_OVERRIDES': {
+        'ValidationErrorEnum': 'django.core.exceptions.ValidationError',
+    },
+    'POSTPROCESSING_HOOKS': [
+        'drf_spectacular.hooks.postprocess_schema_enums'
+    ],
+    'PREPROCESSING_HOOKS': [
+        'drf_spectacular.hooks.preprocess_exclude_path_format'
+    ],
+    'TAGS': [
+        {'name': 'Authentication', 'description': 'User authentication and account management'},
+        {'name': 'Users', 'description': 'User profile and social features'},
+        {'name': 'Videos', 'description': 'Video upload, management, and streaming'},
+        {'name': 'Parties', 'description': 'Watch party creation and management'},
+        {'name': 'Chat', 'description': 'Real-time messaging during parties'},
+        {'name': 'Billing', 'description': 'Subscription and payment management'},
+        {'name': 'Analytics', 'description': 'Platform and user analytics'},
+        {'name': 'Notifications', 'description': 'Push and email notifications'},
+        {'name': 'Integrations', 'description': 'Third-party service integrations'},
+        {'name': 'Search', 'description': 'Global search and discovery'},
+        {'name': 'Social', 'description': 'Social groups and interactions'},
+        {'name': 'Admin', 'description': 'Administrative functions'},
+    ],
 }
 
 # Logging Configuration

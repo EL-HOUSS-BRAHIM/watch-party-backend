@@ -537,3 +537,304 @@ def mobile_app_info(request):
     }
     
     return StandardResponse.success(app_info, "App info retrieved")
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def register_device(request):
+    """Register a mobile device"""
+    from .models import MobileDevice
+    
+    device_id = request.data.get('device_id')
+    platform = request.data.get('platform', 'unknown')
+    model = request.data.get('model', '')
+    os_version = request.data.get('os_version', '')
+    app_version = request.data.get('app_version', '')
+    push_token = request.data.get('push_token', '')
+    
+    if not device_id:
+        return StandardResponse.error("Device ID is required")
+    
+    try:
+        device, created = MobileDevice.objects.update_or_create(
+            device_id=device_id,
+            defaults={
+                'user': request.user,
+                'platform': platform,
+                'model': model,
+                'os_version': os_version,
+                'app_version': app_version,
+                'push_token': push_token,
+                'push_enabled': True,
+                'is_active': True,
+                'last_active': timezone.now()
+            }
+        )
+        
+        return StandardResponse.success({
+            'device_id': str(device.id),
+            'created': created,
+            'sync_required': created  # New devices need full sync
+        }, "Device registered successfully")
+        
+    except Exception as e:
+        return StandardResponse.error(f"Failed to register device: {str(e)}")
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def track_analytics(request):
+    """Track mobile app analytics events"""
+    from .models import MobileDevice, MobileAnalytics
+    
+    device_id = request.data.get('device_id')
+    events = request.data.get('events', [])
+    
+    if not device_id or not events:
+        return StandardResponse.error("Device ID and events are required")
+    
+    try:
+        device = MobileDevice.objects.get(device_id=device_id, user=request.user)
+        
+        analytics_objects = []
+        for event in events:
+            analytics_objects.append(MobileAnalytics(
+                device=device,
+                event_type=event.get('event_type'),
+                event_name=event.get('event_name'),
+                event_data=event.get('event_data', {}),
+                session_id=event.get('session_id'),
+                screen_name=event.get('screen_name', ''),
+                load_time_ms=event.get('load_time_ms'),
+                memory_usage_mb=event.get('memory_usage_mb'),
+                timestamp=timezone.now()
+            ))
+        
+        MobileAnalytics.objects.bulk_create(analytics_objects)
+        device.update_last_active()
+        
+        return StandardResponse.success({
+            'tracked_events': len(analytics_objects)
+        }, "Analytics events tracked successfully")
+        
+    except MobileDevice.DoesNotExist:
+        return StandardResponse.error("Device not found")
+    except Exception as e:
+        return StandardResponse.error(f"Failed to track analytics: {str(e)}")
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def report_crash(request):
+    """Report mobile app crash"""
+    from .models import MobileDevice, MobileAppCrash
+    
+    device_id = request.data.get('device_id')
+    crash_data = request.data.get('crash_data', {})
+    
+    if not device_id or not crash_data:
+        return StandardResponse.error("Device ID and crash data are required")
+    
+    try:
+        device = MobileDevice.objects.get(device_id=device_id, user=request.user)
+        
+        crash = MobileAppCrash.objects.create(
+            device=device,
+            crash_id=crash_data.get('crash_id'),
+            stack_trace=crash_data.get('stack_trace', ''),
+            exception_type=crash_data.get('exception_type', ''),
+            exception_message=crash_data.get('exception_message', ''),
+            screen_name=crash_data.get('screen_name', ''),
+            user_action=crash_data.get('user_action', ''),
+            memory_usage_mb=crash_data.get('memory_usage_mb'),
+            battery_level=crash_data.get('battery_level'),
+            crashed_at=timezone.datetime.fromisoformat(
+                crash_data.get('crashed_at', timezone.now().isoformat())
+            )
+        )
+        
+        return StandardResponse.success({
+            'crash_report_id': str(crash.id)
+        }, "Crash report submitted successfully")
+        
+    except MobileDevice.DoesNotExist:
+        return StandardResponse.error("Device not found")
+    except Exception as e:
+        return StandardResponse.error(f"Failed to report crash: {str(e)}")
+
+
+class MobileSyncView(APIView):
+    """Data synchronization for mobile devices"""
+    permission_classes = [IsAuthenticated]
+    
+    @api_response_documentation(
+        summary="Synchronize mobile data",
+        description="Full synchronization endpoint for mobile app data",
+        tags=['Mobile', 'Sync']
+    )
+    def post(self, request):
+        """Perform data synchronization"""
+        from .models import MobileDevice, MobileSyncData
+        
+        device_id = request.data.get('device_id')
+        sync_type = request.data.get('sync_type', 'incremental')
+        last_sync = request.data.get('last_sync')
+        
+        if not device_id:
+            return StandardResponse.error("Device ID is required")
+        
+        try:
+            device = MobileDevice.objects.get(device_id=device_id, user=request.user)
+            
+            # Create sync record
+            sync_record = MobileSyncData.objects.create(
+                device=device,
+                sync_type=sync_type,
+                sync_status='in_progress',
+                started_at=timezone.now()
+            )
+            
+            # Perform sync based on type
+            if sync_type == 'full':
+                sync_data = self.perform_full_sync(request.user)
+            else:
+                sync_data = self.perform_incremental_sync(request.user, last_sync)
+            
+            # Update sync record
+            sync_record.sync_status = 'completed'
+            sync_record.completed_at = timezone.now()
+            sync_record.duration_seconds = (
+                sync_record.completed_at - sync_record.started_at
+            ).total_seconds()
+            sync_record.data_types = list(sync_data.keys())
+            sync_record.records_count = sum(
+                len(data) if isinstance(data, list) else 1 
+                for data in sync_data.values()
+            )
+            sync_record.save()
+            
+            # Update device last sync
+            device.last_sync = timezone.now()
+            device.save(update_fields=['last_sync'])
+            
+            return StandardResponse.success({
+                'sync_id': str(sync_record.id),
+                'data': sync_data,
+                'sync_timestamp': timezone.now().isoformat()
+            }, "Synchronization completed successfully")
+            
+        except MobileDevice.DoesNotExist:
+            return StandardResponse.error("Device not found")
+        except Exception as e:
+            # Update sync record with error
+            if 'sync_record' in locals():
+                sync_record.sync_status = 'failed'
+                sync_record.error_message = str(e)
+                sync_record.save()
+            
+            return StandardResponse.error(f"Synchronization failed: {str(e)}")
+    
+    def perform_full_sync(self, user):
+        """Perform full data synchronization"""
+        sync_data = {}
+        
+        # Sync user profile
+        sync_data['profile'] = {
+            'id': str(user.id),
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'avatar': user.avatar.url if user.avatar else None,
+            'is_premium': getattr(user, 'is_premium', False),
+            'settings': getattr(user, 'settings', {})
+        }
+        
+        # Sync parties
+        from apps.parties.models import WatchParty
+        user_parties = WatchParty.objects.filter(
+            Q(host=user) | Q(participants__user=user, participants__is_active=True)
+        ).distinct()[:50]
+        
+        sync_data['parties'] = [
+            {
+                'id': str(party.id),
+                'title': party.title,
+                'description': party.description,
+                'is_active': party.is_active,
+                'host_id': str(party.host.id),
+                'created_at': party.created_at.isoformat(),
+                'updated_at': party.updated_at.isoformat()
+            }
+            for party in user_parties
+        ]
+        
+        # Sync videos
+        from apps.videos.models import Video
+        user_videos = Video.objects.filter(
+            Q(uploaded_by=user) | Q(is_public=True),
+            status='ready'
+        )[:50]
+        
+        sync_data['videos'] = [
+            {
+                'id': str(video.id),
+                'title': video.title,
+                'description': video.description,
+                'thumbnail': video.thumbnail.url if video.thumbnail else None,
+                'duration': str(video.duration) if video.duration else None,
+                'status': video.status,
+                'created_at': video.created_at.isoformat()
+            }
+            for video in user_videos
+        ]
+        
+        return sync_data
+    
+    def perform_incremental_sync(self, user, last_sync):
+        """Perform incremental data synchronization"""
+        if last_sync:
+            last_sync_dt = timezone.datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+        else:
+            last_sync_dt = timezone.now() - timedelta(hours=1)
+        
+        sync_data = {}
+        
+        # Sync updated parties
+        from apps.parties.models import WatchParty
+        updated_parties = WatchParty.objects.filter(
+            Q(host=user) | Q(participants__user=user, participants__is_active=True),
+            updated_at__gte=last_sync_dt
+        ).distinct()
+        
+        sync_data['parties'] = [
+            {
+                'id': str(party.id),
+                'title': party.title,
+                'is_active': party.is_active,
+                'updated_at': party.updated_at.isoformat(),
+                'action': 'update'
+            }
+            for party in updated_parties
+        ]
+        
+        # Sync new notifications
+        from apps.notifications.models import Notification
+        new_notifications = Notification.objects.filter(
+            user=user,
+            created_at__gte=last_sync_dt
+        )
+        
+        sync_data['notifications'] = [
+            {
+                'id': str(notification.id),
+                'title': notification.title,
+                'message': notification.message,
+                'is_read': notification.is_read,
+                'created_at': notification.created_at.isoformat(),
+                'action': 'create'
+            }
+            for notification in new_notifications
+        ]
+        
+        return sync_data

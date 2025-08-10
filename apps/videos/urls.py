@@ -6,6 +6,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     VideoViewSet, 
+    VideoCommentViewSet,
     VideoUploadView, 
     VideoUploadCompleteView, 
     VideoUploadStatusView, 
@@ -42,6 +43,7 @@ app_name = 'videos'
 # Create router for ViewSet
 router = DefaultRouter()
 router.register(r'', VideoViewSet, basename='video')
+router.register(r'comments', VideoCommentViewSet, basename='video-comment')
 
 urlpatterns = [
     # Video CRUD operations (handled by ViewSet)

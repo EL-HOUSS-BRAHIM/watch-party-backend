@@ -5,6 +5,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.shortcuts import redirect
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -34,6 +35,10 @@ def api_root(request):
             'integrations': '/api/integrations/',
             'interactive': '/api/interactive/',
             'moderation': '/api/moderation/',
+            'events': '/api/events/',
+            'social': '/api/social/',
+            'support': '/api/support/',
+            'mobile': '/api/mobile/',
             'documentation': '/api/docs/',
             'schema': '/api/schema/',
         }
@@ -187,15 +192,20 @@ urlpatterns = [
     path('api/social/', include('apps.social.urls')),
     path('api/messaging/', include('apps.messaging.urls')),
     path('api/support/', include('apps.support.urls')),
+    path('api/events/', include('apps.events.urls')),
     path('api/mobile/', include('apps.mobile.urls')),
     
     # Admin Panel API
     path('api/admin/', include('apps.admin_panel.urls')),
     
-    # API Documentation
+    # API Documentation - Enhanced Swagger Setup
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    
+    # Redirect /docs to /api/docs for convenience
+    path('docs/', lambda request: redirect('/api/docs/')),
+    path('swagger/', lambda request: redirect('/api/docs/')),
     
     # Legacy redirects (for backward compatibility)
     path('auth/<path:remaining>', lambda r, remaining: redirect_to_api(r, 'auth', '/api/auth/')),

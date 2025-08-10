@@ -9,12 +9,17 @@ from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db.models import Q, Count, Sum, Avg
+from django.db.models import Q, Count, Sum, Avg, F
 from django.db import transaction
+from django.http import HttpResponse
+from django.core.mail import send_mass_mail
 from datetime import timedelta
 from typing import Dict, List, Any
+import csv
+import json
 
 from core.permissions import IsAdminUser, IsSuperUser
+from core.responses import StandardResponse
 from apps.parties.models import WatchParty
 from apps.videos.models import Video
 from apps.analytics.models import SystemAnalytics, AnalyticsEvent
@@ -1286,3 +1291,468 @@ def admin_send_notification(request):
         return Response({
             'error': f'Failed to send notification: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Enhanced Admin Panel Features (Task 10)
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def admin_bulk_user_actions(request):
+    """Perform bulk actions on users"""
+    
+    user_ids = request.data.get('user_ids', [])
+    action = request.data.get('action')  # suspend, unsuspend, delete, export
+    
+    if not user_ids or not action:
+        return StandardResponse.error("User IDs and action are required")
+    
+    users = User.objects.filter(id__in=user_ids)
+    
+    if action == 'suspend':
+        # Prevent suspending staff/admin users
+        staff_users = users.filter(Q(is_staff=True) | Q(is_superuser=True))
+        if staff_users.exists():
+            return StandardResponse.error("Cannot suspend staff or admin users")
+        
+        users.update(is_active=False)
+        action_message = f"Suspended {users.count()} users"
+        
+    elif action == 'unsuspend':
+        users.update(is_active=True)
+        action_message = f"Unsuspended {users.count()} users"
+        
+    elif action == 'delete':
+        # Prevent deleting staff/admin users
+        staff_users = users.filter(Q(is_staff=True) | Q(is_superuser=True))
+        if staff_users.exists():
+            return StandardResponse.error("Cannot delete staff or admin users")
+        
+        count = users.count()
+        users.delete()
+        action_message = f"Deleted {count} users"
+        
+    elif action == 'export':
+        return admin_export_users(request, user_ids)
+        
+    else:
+        return StandardResponse.error("Invalid action")
+    
+    # Log the bulk action
+    AnalyticsEvent.objects.create(
+        user=request.user,
+        event_type='admin_bulk_user_action',
+        data={
+            'action': action,
+            'user_count': len(user_ids),
+            'user_ids': user_ids
+        },
+        ip_address=request.META.get('REMOTE_ADDR', '')
+    )
+    
+    return StandardResponse.success({'message': action_message})
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_export_users(request, user_ids=None):
+    """Export users to CSV"""
+    
+    if user_ids:
+        users = User.objects.filter(id__in=user_ids)
+    else:
+        # Export all users with filters
+        search = request.GET.get('search', '')
+        status_filter = request.GET.get('status', 'all')
+        
+        users = User.objects.all()
+        
+        if search:
+            users = users.filter(
+                Q(username__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        
+        if status_filter == 'active':
+            users = users.filter(is_active=True)
+        elif status_filter == 'suspended':
+            users = users.filter(is_active=False)
+    
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="users_export_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow([
+        'ID', 'Username', 'Email', 'First Name', 'Last Name', 
+        'Is Active', 'Is Staff', 'Date Joined', 'Last Login',
+        'Total Videos', 'Total Parties', 'Total Watch Time'
+    ])
+    
+    for user in users.select_related('profile'):
+        # Get user statistics
+        video_count = Video.objects.filter(uploaded_by=user).count()
+        party_count = WatchParty.objects.filter(host=user).count()
+        
+        writer.writerow([
+            str(user.id),
+            user.username,
+            user.email,
+            user.first_name,
+            user.last_name,
+            user.is_active,
+            user.is_staff,
+            user.date_joined.strftime('%Y-%m-%d %H:%M:%S') if user.date_joined else '',
+            user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else '',
+            video_count,
+            party_count,
+            0  # Placeholder for watch time
+        ])
+    
+    return response
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_system_health(request):
+    """Get comprehensive system health metrics"""
+    
+    try:
+        import psutil
+        import os
+        
+        # System metrics
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        # Database metrics
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE state = 'active';")
+            active_connections = cursor.fetchone()[0]
+        
+        # Application metrics
+        total_users = User.objects.count()
+        active_users_24h = User.objects.filter(
+            last_login__gte=timezone.now() - timedelta(hours=24)
+        ).count()
+        
+        total_videos = Video.objects.count()
+        processing_videos = Video.objects.filter(status='processing').count()
+        
+        active_parties = WatchParty.objects.filter(is_active=True).count()
+        
+        # Error rates (simplified)
+        error_rate = 0.0  # Would implement actual error tracking
+        
+        health_data = {
+            'system': {
+                'cpu_usage_percent': cpu_percent,
+                'memory_usage_percent': memory.percent,
+                'memory_available_gb': round(memory.available / (1024**3), 2),
+                'disk_usage_percent': round(disk.used / disk.total * 100, 2),
+                'disk_free_gb': round(disk.free / (1024**3), 2),
+                'active_db_connections': active_connections,
+                'uptime_hours': round((timezone.now() - timezone.now().replace(hour=0, minute=0, second=0)).total_seconds() / 3600, 1)
+            },
+            'application': {
+                'total_users': total_users,
+                'active_users_24h': active_users_24h,
+                'user_activity_rate': round((active_users_24h / total_users * 100) if total_users > 0 else 0, 2),
+                'total_videos': total_videos,
+                'processing_videos': processing_videos,
+                'active_parties': active_parties,
+                'error_rate_percent': error_rate
+            },
+            'alerts': [],
+            'last_updated': timezone.now().isoformat()
+        }
+        
+        # Generate alerts based on thresholds
+        if cpu_percent > 80:
+            health_data['alerts'].append({
+                'type': 'warning',
+                'message': f'High CPU usage: {cpu_percent}%'
+            })
+        
+        if memory.percent > 85:
+            health_data['alerts'].append({
+                'type': 'warning',
+                'message': f'High memory usage: {memory.percent}%'
+            })
+        
+        if disk.used / disk.total > 0.9:
+            health_data['alerts'].append({
+                'type': 'critical',
+                'message': f'Low disk space: {round((1 - disk.free / disk.total) * 100, 1)}% used'
+            })
+        
+        if processing_videos > 10:
+            health_data['alerts'].append({
+                'type': 'info',
+                'message': f'{processing_videos} videos are currently processing'
+            })
+        
+        return StandardResponse.success(health_data)
+        
+    except ImportError:
+        return StandardResponse.error("System monitoring dependencies not available")
+    except Exception as e:
+        return StandardResponse.error(f"Failed to get system health: {str(e)}")
+
+
+@api_view(['POST'])
+@permission_classes([IsSuperUser])
+def admin_broadcast_message(request):
+    """Broadcast message to all users or specific user groups"""
+    
+    title = request.data.get('title')
+    message = request.data.get('message')
+    message_type = request.data.get('message_type', 'info')  # info, warning, critical
+    target_group = request.data.get('target_group', 'all')  # all, active, premium, staff
+    send_email = request.data.get('send_email', False)
+    
+    if not title or not message:
+        return StandardResponse.error("Title and message are required")
+    
+    # Determine target users
+    if target_group == 'active':
+        users = User.objects.filter(
+            is_active=True,
+            last_login__gte=timezone.now() - timedelta(days=30)
+        )
+    elif target_group == 'premium':
+        users = User.objects.filter(is_active=True, subscription__status='active')
+    elif target_group == 'staff':
+        users = User.objects.filter(is_staff=True, is_active=True)
+    else:  # all
+        users = User.objects.filter(is_active=True)
+    
+    # Create notifications
+    notifications_created = 0
+    for user in users:
+        from apps.notifications.models import Notification
+        Notification.objects.create(
+            user=user,
+            title=title,
+            message=message,
+            notification_type=message_type,
+            is_read=False
+        )
+        notifications_created += 1
+    
+    # Send emails if requested
+    emails_sent = 0
+    if send_email:
+        try:
+            email_messages = []
+            for user in users[:100]:  # Limit to prevent abuse
+                if user.email:
+                    email_messages.append((
+                        title,
+                        message,
+                        'noreply@watchparty.com',
+                        [user.email]
+                    ))
+            
+            send_mass_mail(email_messages, fail_silently=True)
+            emails_sent = len(email_messages)
+        except Exception as e:
+            # Log email error but don't fail the broadcast
+            pass
+    
+    # Log the broadcast
+    AnalyticsEvent.objects.create(
+        user=request.user,
+        event_type='admin_broadcast_message',
+        data={
+            'title': title,
+            'message_type': message_type,
+            'target_group': target_group,
+            'recipients_count': notifications_created,
+            'emails_sent': emails_sent
+        },
+        ip_address=request.META.get('REMOTE_ADDR', '')
+    )
+    
+    return StandardResponse.success({
+        'notifications_sent': notifications_created,
+        'emails_sent': emails_sent,
+        'target_group': target_group
+    }, "Broadcast message sent successfully")
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_analytics_overview(request):
+    """Get comprehensive analytics overview for admin dashboard"""
+    
+    days = int(request.GET.get('days', 30))
+    start_date = timezone.now() - timedelta(days=days)
+    
+    # User analytics
+    user_registrations = User.objects.filter(
+        date_joined__gte=start_date
+    ).extra({
+        'date': 'date(date_joined)'
+    }).values('date').annotate(
+        count=Count('id')
+    ).order_by('date')
+    
+    # Content analytics
+    video_uploads = Video.objects.filter(
+        created_at__gte=start_date
+    ).extra({
+        'date': 'date(created_at)'
+    }).values('date').annotate(
+        count=Count('id')
+    ).order_by('date')
+    
+    # Party analytics
+    party_creations = WatchParty.objects.filter(
+        created_at__gte=start_date
+    ).extra({
+        'date': 'date(created_at)'
+    }).values('date').annotate(
+        count=Count('id')
+    ).order_by('date')
+    
+    # Revenue analytics (if billing is enabled)
+    revenue_data = []
+    try:
+        revenue_by_day = Payment.objects.filter(
+            status='completed',
+            created_at__gte=start_date
+        ).extra({
+            'date': 'date(created_at)'
+        }).values('date').annotate(
+            total=Sum('amount')
+        ).order_by('date')
+        
+        revenue_data = list(revenue_by_day)
+    except:
+        pass
+    
+    # Top content
+    popular_videos = Video.objects.filter(
+        created_at__gte=start_date,
+        status='ready'
+    ).annotate(
+        view_count=Count('watch_times')
+    ).order_by('-view_count')[:10]
+    
+    # User engagement
+    active_users_by_day = AnalyticsEvent.objects.filter(
+        timestamp__gte=start_date,
+        event_type='user_login'
+    ).extra({
+        'date': 'date(timestamp)'
+    }).values('date').annotate(
+        unique_users=Count('user', distinct=True)
+    ).order_by('date')
+    
+    analytics_data = {
+        'time_series': {
+            'user_registrations': list(user_registrations),
+            'video_uploads': list(video_uploads),
+            'party_creations': list(party_creations),
+            'active_users': list(active_users_by_day),
+            'revenue': revenue_data
+        },
+        'top_content': {
+            'popular_videos': [
+                {
+                    'id': str(video.id),
+                    'title': video.title,
+                    'uploader': video.uploaded_by.username,
+                    'view_count': video.view_count,
+                    'created_at': video.created_at.date()
+                }
+                for video in popular_videos
+            ]
+        },
+        'summary': {
+            'total_users': User.objects.count(),
+            'total_videos': Video.objects.count(),
+            'total_parties': WatchParty.objects.count(),
+            'active_parties': WatchParty.objects.filter(is_active=True).count(),
+            'new_users_period': User.objects.filter(date_joined__gte=start_date).count(),
+            'new_videos_period': Video.objects.filter(created_at__gte=start_date).count(),
+            'period_days': days
+        }
+    }
+    
+    return StandardResponse.success(analytics_data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_content_moderation(request):
+    """Get content moderation queue and tools"""
+    
+    # Get reported content
+    reports = []
+    try:
+        from apps.moderation.models import ContentReport
+        pending_reports = ContentReport.objects.filter(
+            status='pending'
+        ).select_related('reporter', 'content_object').order_by('-created_at')[:50]
+        
+        for report in pending_reports:
+            reports.append({
+                'id': str(report.id),
+                'content_type': report.content_type.model,
+                'content_id': str(report.object_id),
+                'report_type': report.report_type,
+                'description': report.description,
+                'reporter': {
+                    'id': str(report.reporter.id),
+                    'username': report.reporter.username
+                },
+                'created_at': report.created_at,
+                'severity': getattr(report, 'severity', 'medium')
+            })
+    except ImportError:
+        pass
+    
+    # Get flagged videos (example criteria)
+    flagged_videos = Video.objects.filter(
+        Q(status='flagged') | Q(title__icontains='test')  # Example criteria
+    ).select_related('uploaded_by')[:20]
+    
+    flagged_content = [
+        {
+            'id': str(video.id),
+            'title': video.title,
+            'uploader': {
+                'id': str(video.uploaded_by.id),
+                'username': video.uploaded_by.username
+            },
+            'status': video.status,
+            'created_at': video.created_at,
+            'flag_reason': 'Automated detection'  # Would be more sophisticated
+        }
+        for video in flagged_videos
+    ]
+    
+    moderation_data = {
+        'pending_reports': reports,
+        'flagged_content': flagged_content,
+        'moderation_stats': {
+            'total_reports': len(reports),
+            'flagged_videos': len(flagged_content),
+            'resolved_today': 0,  # Would implement actual tracking
+            'pending_review': len(reports) + len(flagged_content)
+        },
+        'quick_actions': [
+            'approve_content',
+            'remove_content',
+            'suspend_user',
+            'warn_user',
+            'escalate_report'
+        ]
+    }
+    
+    return StandardResponse.success(moderation_data)

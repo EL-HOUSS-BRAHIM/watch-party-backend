@@ -750,3 +750,565 @@ def _calculate_reactions_per_minute():
         return recent_reactions
     except:
         return 0
+
+
+# Enhanced Analytics Features (Task 11)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def video_detailed_analytics(request, video_id):
+    """Get detailed analytics for a specific video"""
+    try:
+        from apps.analytics.models import WatchTime
+        
+        video = Video.objects.get(id=video_id)
+        
+        # Check permissions
+        if not (video.uploaded_by == request.user or request.user.is_staff):
+            return StandardResponse.error("You don't have permission to view these analytics")
+        
+        # Basic video stats
+        watch_times = WatchTime.objects.filter(video=video)
+        total_views = watch_times.count()
+        total_watch_time = watch_times.aggregate(Sum('total_watch_time'))['total_watch_time__sum'] or 0
+        avg_completion = watch_times.aggregate(Avg('completion_percentage'))['completion_percentage__avg'] or 0
+        
+        # Viewer retention analysis
+        retention_data = []
+        if video.duration:
+            duration_seconds = int(video.duration.total_seconds())
+            interval = max(1, duration_seconds // 100)
+            
+            for i in range(0, duration_seconds, interval):
+                viewers_at_time = watch_times.filter(last_position__gte=i).count()
+                retention_rate = (viewers_at_time / max(1, total_views)) * 100
+                
+                retention_data.append({
+                    'time_seconds': i,
+                    'retention_rate': round(retention_rate, 2),
+                    'viewer_count': viewers_at_time
+                })
+        
+        # Engagement heatmap
+        events = AnalyticsEvent.objects.filter(
+            video=video,
+            event_type__in=['video_pause', 'video_resume', 'video_seek']
+        ).values('event_data', 'event_type').order_by('timestamp')
+        
+        engagement_map = {}
+        for event in events:
+            try:
+                timestamp = event['event_data'].get('timestamp', 0)
+                if timestamp:
+                    time_bucket = (timestamp // 10) * 10
+                    engagement_map[time_bucket] = engagement_map.get(time_bucket, 0) + 1
+            except:
+                continue
+        
+        heatmap_data = [
+            {
+                'time_seconds': time_bucket,
+                'interaction_count': count,
+                'engagement_level': min(100, (count / max(engagement_map.values()) * 100)) if engagement_map else 0
+            }
+            for time_bucket, count in sorted(engagement_map.items())
+        ]
+        
+        # Demographics analysis
+        platform_stats = AnalyticsEvent.objects.filter(
+            video=video,
+            event_type='video_play'
+        ).values('event_data__platform').annotate(count=Count('id'))
+        
+        # Time-based analytics
+        hourly_views = AnalyticsEvent.objects.filter(
+            video=video,
+            event_type='video_play'
+        ).extra({'hour': 'extract(hour from timestamp)'}).values('hour').annotate(
+            count=Count('id')
+        ).order_by('hour')
+        
+        # Quality metrics
+        quality_stats = watch_times.exclude(average_quality='').values('average_quality').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        # Performance metrics
+        bounce_rate = 0
+        if total_views > 0:
+            bounced_viewers = watch_times.filter(completion_percentage__lt=10).count()
+            bounce_rate = (bounced_viewers / total_views) * 100
+        
+        # Engagement score
+        interaction_count = AnalyticsEvent.objects.filter(
+            video=video,
+            event_type__in=['video_pause', 'video_resume', 'video_seek', 'video_like']
+        ).count()
+        
+        completion_score = min(100, avg_completion)
+        interaction_score = min(100, interaction_count / max(1, total_views) * 10)
+        engagement_score = (completion_score * 0.7) + (interaction_score * 0.3)
+        
+        # Viral coefficient
+        total_shares = AnalyticsEvent.objects.filter(
+            video=video,
+            event_type='video_share'
+        ).count()
+        viral_coefficient = total_shares / max(1, total_views)
+        
+        analytics_data = {
+            'video_info': {
+                'id': str(video.id),
+                'title': video.title,
+                'duration': str(video.duration) if video.duration else None,
+                'uploaded_at': video.created_at,
+                'status': video.status
+            },
+            'overview': {
+                'total_views': total_views,
+                'total_watch_time_seconds': total_watch_time,
+                'average_completion_rate': round(avg_completion, 2),
+                'unique_viewers': watch_times.values('user').distinct().count(),
+                'repeat_viewers': watch_times.values('user').annotate(
+                    view_count=Count('id')
+                ).filter(view_count__gt=1).count()
+            },
+            'retention': retention_data,
+            'heatmap': heatmap_data,
+            'demographics': {
+                'platforms': list(platform_stats),
+                'devices': [],
+                'age_groups': [],
+                'countries': []
+            },
+            'time_analytics': {
+                'hourly_distribution': list(hourly_views),
+                'daily_distribution': []
+            },
+            'quality_distribution': list(quality_stats),
+            'performance_metrics': {
+                'bounce_rate': round(bounce_rate, 2),
+                'engagement_score': round(engagement_score, 2),
+                'viral_coefficient': round(viral_coefficient, 4)
+            }
+        }
+        
+        return StandardResponse.success(analytics_data)
+        
+    except Video.DoesNotExist:
+        return StandardResponse.error("Video not found")
+    except Exception as e:
+        return StandardResponse.error(f"Error retrieving video analytics: {str(e)}")
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_behavior_detailed(request):
+    """Analyze detailed user behavior patterns"""
+    try:
+        user = request.user
+        days = int(request.GET.get('days', 30))
+        start_date = timezone.now() - timedelta(days=days)
+        
+        # User activity patterns
+        events = AnalyticsEvent.objects.filter(
+            user=user,
+            timestamp__gte=start_date
+        )
+        
+        # Daily activity
+        daily_activity = events.extra(
+            {'date': 'date(timestamp)'}
+        ).values('date').annotate(
+            event_count=Count('id')
+        ).order_by('date')
+        
+        # Hourly activity
+        hourly_activity = events.extra(
+            {'hour': 'extract(hour from timestamp)'}
+        ).values('hour').annotate(
+            event_count=Count('id')
+        ).order_by('hour')
+        
+        # Viewing preferences
+        from apps.analytics.models import WatchTime
+        watch_times = WatchTime.objects.filter(
+            user=user,
+            created_at__gte=start_date
+        ).select_related('video')
+        
+        # Genre preferences
+        genre_stats = {}
+        duration_preferences = {'short': 0, 'medium': 0, 'long': 0}
+        
+        for watch_time in watch_times:
+            video = watch_time.video
+            if hasattr(video, 'category') and video.category:
+                genre_stats[video.category] = genre_stats.get(video.category, 0) + 1
+            
+            # Duration buckets
+            if video.duration:
+                duration_seconds = video.duration.total_seconds()
+                if duration_seconds < 300:  # < 5 min
+                    duration_preferences['short'] += 1
+                elif duration_seconds < 1800:  # < 30 min
+                    duration_preferences['medium'] += 1
+                else:  # > 30 min
+                    duration_preferences['long'] += 1
+        
+        # Engagement metrics
+        engagement_events = events.filter(
+            event_type__in=['video_like', 'video_share', 'comment_post', 'party_create']
+        )
+        
+        # Social interactions
+        parties_hosted = WatchParty.objects.filter(
+            host=user,
+            created_at__gte=start_date
+        ).count()
+        
+        parties_joined = WatchParty.objects.filter(
+            participants__user=user,
+            created_at__gte=start_date
+        ).distinct().count()
+        
+        # Content discovery
+        discovery_events = events.filter(
+            event_type__in=['video_discovery', 'party_discovery', 'search_performed']
+        )
+        
+        discovery_sources = discovery_events.values('event_data__source').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        behavior_data = {
+            'period': {
+                'days': days,
+                'start_date': start_date.date(),
+                'end_date': timezone.now().date()
+            },
+            'activity_patterns': {
+                'daily_activity': list(daily_activity),
+                'hourly_activity': list(hourly_activity),
+                'peak_activity_hour': max(hourly_activity, key=lambda x: x['event_count'])['hour'] if hourly_activity else 0
+            },
+            'viewing_preferences': {
+                'favorite_genres': genre_stats,
+                'duration_preferences': duration_preferences,
+                'average_completion_rate': watch_times.aggregate(
+                    Avg('completion_percentage')
+                )['completion_percentage__avg'] or 0,
+                'total_watch_time_hours': (watch_times.aggregate(
+                    Sum('total_watch_time')
+                )['total_watch_time__sum'] or 0) / 3600
+            },
+            'engagement_metrics': {
+                'total_events': events.count(),
+                'engagement_events': engagement_events.count(),
+                'engagement_rate': (engagement_events.count() / max(1, events.count())) * 100,
+                'favorite_actions': list(events.values('event_type').annotate(
+                    count=Count('id')
+                ).order_by('-count')[:5])
+            },
+            'social_interactions': {
+                'parties_hosted': parties_hosted,
+                'parties_joined': parties_joined,
+                'social_engagement_score': (parties_hosted * 2 + parties_joined) / max(1, days) * 7
+            },
+            'content_discovery': {
+                'discovery_sources': list(discovery_sources),
+                'search_frequency': discovery_events.filter(event_type='search_performed').count()
+            }
+        }
+        
+        return StandardResponse.success(behavior_data)
+        
+    except Exception as e:
+        return StandardResponse.error(f"Error analyzing user behavior: {str(e)}")
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def real_time_analytics(request):
+    """Get real-time analytics data"""
+    try:
+        # Live metrics (last 5 minutes)
+        five_minutes_ago = timezone.now() - timedelta(minutes=5)
+        
+        # Active users
+        active_users = AnalyticsEvent.objects.filter(
+            timestamp__gte=five_minutes_ago
+        ).values('user').distinct().count()
+        
+        # Active parties
+        active_parties = WatchParty.objects.filter(is_active=True).count()
+        
+        # Videos being watched
+        recent_plays = AnalyticsEvent.objects.filter(
+            event_type='video_play',
+            timestamp__gte=timezone.now() - timedelta(minutes=10)
+        ).values('video').annotate(
+            viewer_count=Count('user', distinct=True)
+        ).order_by('-viewer_count')[:10]
+        
+        # Recent activities
+        recent_events = AnalyticsEvent.objects.filter(
+            timestamp__gte=five_minutes_ago
+        ).select_related('user', 'video', 'party').order_by('-timestamp')[:20]
+        
+        activities = []
+        for event in recent_events:
+            activity = {
+                'type': event.event_type,
+                'user': event.user.username if event.user else 'Anonymous',
+                'timestamp': event.timestamp,
+                'details': event.event_data
+            }
+            
+            if event.video:
+                activity['video'] = {
+                    'id': str(event.video.id),
+                    'title': event.video.title
+                }
+            
+            if event.party:
+                activity['party'] = {
+                    'id': str(event.party.id),
+                    'title': event.party.title
+                }
+            
+            activities.append(activity)
+        
+        # Trending content
+        trending_videos = AnalyticsEvent.objects.filter(
+            event_type__in=['video_play', 'video_like'],
+            timestamp__gte=timezone.now() - timedelta(hours=1)
+        ).values('video').annotate(
+            engagement_score=Count('id')
+        ).order_by('-engagement_score')[:5]
+        
+        live_metrics = {
+            'active_users': active_users,
+            'active_parties': active_parties,
+            'videos_being_watched': list(recent_plays),
+            'recent_activities': activities,
+            'system_load': {
+                'cpu_usage': 0,
+                'memory_usage': 0,
+                'active_connections': 0,
+                'response_time_ms': 0
+            },
+            'popular_content': list(trending_videos),
+            'last_updated': timezone.now().isoformat()
+        }
+        
+        return StandardResponse.success(live_metrics)
+        
+    except Exception as e:
+        return StandardResponse.error(f"Error retrieving real-time analytics: {str(e)}")
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def predictive_analytics(request):
+    """Get predictive analytics and forecasting"""
+    try:
+        forecast_days = int(request.GET.get('forecast_days', 7))
+        
+        # User growth prediction
+        last_30_days = timezone.now() - timedelta(days=30)
+        daily_registrations = User.objects.filter(
+            date_joined__gte=last_30_days
+        ).extra({
+            'day': 'date(date_joined)'
+        }).values('day').annotate(
+            count=Count('id')
+        ).order_by('day')
+        
+        # Simple trend calculation
+        if daily_registrations:
+            total_new_users = sum(reg['count'] for reg in daily_registrations)
+            avg_daily_growth = total_new_users / 30
+            
+            user_growth_forecast = []
+            for i in range(forecast_days):
+                forecast_date = timezone.now().date() + timedelta(days=i+1)
+                predicted_users = max(0, int(avg_daily_growth))
+                
+                user_growth_forecast.append({
+                    'date': forecast_date,
+                    'predicted_new_users': predicted_users
+                })
+        else:
+            user_growth_forecast = []
+        
+        # Content consumption forecast
+        last_week_events = AnalyticsEvent.objects.filter(
+            event_type='video_play',
+            timestamp__gte=timezone.now() - timedelta(days=7)
+        ).count()
+        
+        avg_daily_views = last_week_events / 7
+        
+        consumption_forecast = []
+        for i in range(forecast_days):
+            forecast_date = timezone.now().date() + timedelta(days=i+1)
+            predicted_views = max(0, int(avg_daily_views))
+            
+            consumption_forecast.append({
+                'date': forecast_date,
+                'predicted_video_views': predicted_views
+            })
+        
+        # Churn analysis
+        inactive_threshold = timezone.now() - timedelta(days=14)
+        at_risk_users = User.objects.filter(
+            last_login__lt=inactive_threshold,
+            is_active=True
+        ).count()
+        
+        total_active_users = User.objects.filter(is_active=True).count()
+        churn_risk_percentage = (at_risk_users / max(1, total_active_users)) * 100
+        
+        predictive_data = {
+            'forecast_period_days': forecast_days,
+            'user_growth': {
+                'forecast': user_growth_forecast,
+                'confidence': 65 if daily_registrations else 0,
+                'trend': 'growing' if avg_daily_growth > 0 else 'declining' if 'avg_daily_growth' in locals() else 'stable'
+            },
+            'content_consumption': {
+                'forecast': consumption_forecast,
+                'confidence': 60
+            },
+            'churn_analysis': {
+                'at_risk_users': at_risk_users,
+                'total_active_users': total_active_users,
+                'churn_risk_percentage': round(churn_risk_percentage, 2),
+                'risk_level': 'high' if churn_risk_percentage > 20 else 'medium' if churn_risk_percentage > 10 else 'low'
+            },
+            'recommendations': [
+                {
+                    'type': 'growth',
+                    'message': 'Consider implementing referral program to boost user growth',
+                    'priority': 'medium'
+                },
+                {
+                    'type': 'retention',
+                    'message': 'Increase engagement with at-risk users through targeted notifications',
+                    'priority': 'high'
+                }
+            ]
+        }
+        
+        return StandardResponse.success(predictive_data)
+        
+    except Exception as e:
+        return StandardResponse.error(f"Error generating predictive analytics: {str(e)}")
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def comparative_analytics(request):
+    """Get comparative analytics between different time periods"""
+    try:
+        current_days = int(request.GET.get('current_days', 7))
+        compare_days = int(request.GET.get('compare_days', 7))
+        
+        current_end = timezone.now()
+        current_start = current_end - timedelta(days=current_days)
+        
+        compare_end = current_start
+        compare_start = compare_end - timedelta(days=compare_days)
+        
+        # User metrics comparison
+        current_new_users = User.objects.filter(
+            date_joined__gte=current_start,
+            date_joined__lt=current_end
+        ).count()
+        
+        compare_new_users = User.objects.filter(
+            date_joined__gte=compare_start,
+            date_joined__lt=compare_end
+        ).count()
+        
+        # Video metrics comparison
+        current_videos = Video.objects.filter(
+            created_at__gte=current_start,
+            created_at__lt=current_end
+        ).count()
+        
+        compare_videos = Video.objects.filter(
+            created_at__gte=compare_start,
+            created_at__lt=compare_end
+        ).count()
+        
+        # Party metrics comparison
+        current_parties = WatchParty.objects.filter(
+            created_at__gte=current_start,
+            created_at__lt=current_end
+        ).count()
+        
+        compare_parties = WatchParty.objects.filter(
+            created_at__gte=compare_start,
+            created_at__lt=compare_end
+        ).count()
+        
+        # Engagement metrics comparison
+        current_events = AnalyticsEvent.objects.filter(
+            timestamp__gte=current_start,
+            timestamp__lt=current_end
+        ).count()
+        
+        compare_events = AnalyticsEvent.objects.filter(
+            timestamp__gte=compare_start,
+            timestamp__lt=compare_end
+        ).count()
+        
+        # Calculate percentage changes
+        def calculate_change(current, previous):
+            if previous == 0:
+                return 100 if current > 0 else 0
+            return round(((current - previous) / previous) * 100, 2)
+        
+        comparative_data = {
+            'time_periods': {
+                'current': {
+                    'start': current_start.date(),
+                    'end': current_end.date(),
+                    'days': current_days
+                },
+                'comparison': {
+                    'start': compare_start.date(),
+                    'end': compare_end.date(),
+                    'days': compare_days
+                }
+            },
+            'metrics': {
+                'new_users': {
+                    'current': current_new_users,
+                    'previous': compare_new_users,
+                    'change_percent': calculate_change(current_new_users, compare_new_users)
+                },
+                'new_videos': {
+                    'current': current_videos,
+                    'previous': compare_videos,
+                    'change_percent': calculate_change(current_videos, compare_videos)
+                },
+                'new_parties': {
+                    'current': current_parties,
+                    'previous': compare_parties,
+                    'change_percent': calculate_change(current_parties, compare_parties)
+                },
+                'total_events': {
+                    'current': current_events,
+                    'previous': compare_events,
+                    'change_percent': calculate_change(current_events, compare_events)
+                }
+            }
+        }
+        
+        return StandardResponse.success(comparative_data)
+        
+    except Exception as e:
+        return StandardResponse.error(f"Error generating comparative analytics: {str(e)}")

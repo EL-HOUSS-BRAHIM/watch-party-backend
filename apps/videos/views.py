@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Video, VideoLike, VideoComment, VideoView, VideoUpload
@@ -102,19 +103,26 @@ class VideoViewSet(ModelViewSet):
             if like_obj.is_like == is_like:
                 # Remove like/dislike if clicking same action
                 like_obj.delete()
-                return Response({'liked': False, 'disliked': False})
+                is_liked = False
             else:
                 # Update like/dislike
                 like_obj.is_like = is_like
                 like_obj.save()
+                is_liked = is_like
+        else:
+            is_liked = is_like
         
         # Update like count
         like_count = video.likes.filter(is_like=True).count()
         Video.objects.filter(id=video.id).update(like_count=like_count)
         
+        # Check if user still has like record
+        current_like = VideoLike.objects.filter(user=request.user, video=video).first()
+        
+        # Return response in expected format
         return Response({
-            'liked': is_like,
-            'disliked': not is_like,
+            'success': True,
+            'is_liked': current_like.is_like if current_like else False,
             'like_count': like_count
         })
     
@@ -190,6 +198,45 @@ class VideoViewSet(ModelViewSet):
         if x_forwarded_for:
             return x_forwarded_for.split(',')[0]
         return request.META.get('REMOTE_ADDR')
+
+
+class VideoCommentViewSet(ModelViewSet):
+    """Video comment CRUD operations"""
+    
+    queryset = VideoComment.objects.all()
+    serializer_class = VideoCommentSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
+    
+    def get_queryset(self):
+        """Filter comments by video if video_id is provided"""
+        queryset = super().get_queryset()
+        video_id = self.request.query_params.get('video_id')
+        if video_id:
+            queryset = queryset.filter(video__id=video_id)
+        return queryset.select_related('user', 'video').prefetch_related('replies')
+    
+    def perform_create(self, serializer):
+        """Set the user when creating a comment"""
+        video_id = self.request.data.get('video_id')
+        parent_id = self.request.data.get('parent_id')
+        
+        try:
+            video = Video.objects.get(id=video_id)
+        except Video.DoesNotExist:
+            raise ValidationError({'video_id': 'Invalid video ID'})
+        
+        parent = None
+        if parent_id:
+            try:
+                parent = VideoComment.objects.get(id=parent_id, video=video)
+            except VideoComment.DoesNotExist:
+                raise ValidationError({'parent_id': 'Invalid parent comment ID'})
+        
+        serializer.save(user=self.request.user, video=video, parent=parent)
+    
+    def perform_update(self, serializer):
+        """Mark comment as edited when updated"""
+        serializer.save(is_edited=True)
 
 
 class VideoUploadView(APIView):
