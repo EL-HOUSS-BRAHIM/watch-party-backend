@@ -910,6 +910,87 @@ EOF
 # NGINX CONFIGURATION
 # =============================================================================
 
+force_clean_nginx() {
+    log_info "Force cleaning all Nginx configuration conflicts..."
+    
+    # Stop nginx first
+    sudo systemctl stop nginx 2>/dev/null || true
+    
+    # Find and disable all site configurations that have rate limiting zones
+    log_info "Identifying conflicting site configurations..."
+    
+    local conflicting_sites=()
+    while IFS= read -r -d '' file; do
+        if [[ -f "$file" && "$file" != *"watch-party"* ]]; then
+            if grep -q "limit_req_zone\|limit_req.*zone=" "$file" 2>/dev/null; then
+                conflicting_sites+=("$file")
+                log_warning "Found conflicting configuration: $file"
+            fi
+        fi
+    done < <(find /etc/nginx/sites-enabled -name "*.conf" -print0 2>/dev/null)
+    
+    # Backup and disable conflicting sites temporarily
+    local disabled_files=()
+    for site in "${conflicting_sites[@]}"; do
+        local backup_name="${site}.backup.$(date +%s)"
+        log_info "Temporarily disabling: $(basename "$site")"
+        sudo mv "$site" "$backup_name"
+        disabled_files+=("$backup_name")
+    done
+    
+    # Clean up any existing watch-party configurations
+    sudo rm -f /etc/nginx/sites-enabled/watch-party
+    sudo rm -f /etc/nginx/sites-available/watch-party
+    
+    # Remove any watch-party zones from nginx.conf
+    if [[ -f /etc/nginx/nginx.conf ]]; then
+        sudo sed -i '/# Rate limiting zones for Watch Party/,+10d' /etc/nginx/nginx.conf 2>/dev/null || true
+        sudo sed -i '/limit_req_zone.*watchparty/d' /etc/nginx/nginx.conf 2>/dev/null || true
+    fi
+    
+    log_success "Nginx configuration cleaned"
+    
+    # Save disabled files list for later restoration
+    if [[ ${#disabled_files[@]} -gt 0 ]]; then
+        printf '%s\n' "${disabled_files[@]}" > /tmp/nginx_disabled_files.txt
+        log_info "Disabled configurations saved to /tmp/nginx_disabled_files.txt"
+        log_info "You can restore them later with: restore-nginx-configs"
+    fi
+}
+
+restore_nginx_configs() {
+    log_info "Restoring previously disabled Nginx configurations..."
+    
+    if [[ ! -f /tmp/nginx_disabled_files.txt ]]; then
+        log_warning "No disabled configurations found to restore"
+        return 0
+    fi
+    
+    local restored=0
+    while IFS= read -r backup_file; do
+        if [[ -f "$backup_file" ]]; then
+            local original_file="${backup_file%.backup.*}"
+            log_info "Restoring: $(basename "$original_file")"
+            sudo mv "$backup_file" "$original_file"
+            ((restored++))
+        fi
+    done < /tmp/nginx_disabled_files.txt
+    
+    if [[ $restored -gt 0 ]]; then
+        rm -f /tmp/nginx_disabled_files.txt
+        log_success "Restored $restored configuration files"
+        log_info "Testing nginx configuration..."
+        if sudo nginx -t; then
+            log_success "Nginx configuration is valid"
+            sudo systemctl reload nginx
+        else
+            log_error "Nginx configuration test failed after restoration"
+        fi
+    else
+        log_warning "No files were restored"
+    fi
+}
+
 clean_nginx_conflicts() {
     log_info "Cleaning up Nginx configuration conflicts..."
     
@@ -1507,6 +1588,10 @@ show_help() {
     echo "  config-nginx           Reconfigure Nginx"
     echo "  fix-nginx              Fix Nginx configuration issues"
     echo "  clean-nginx            Force clean all nginx conflicts"
+    echo "  force-clean-nginx      Aggressively clean nginx conflicts by disabling conflicting sites"
+    echo "  restore-nginx-configs  Restore previously disabled nginx configurations"
+    echo "  force-fix-nginx        Force clean and reconfigure nginx completely"
+    echo "  test-nginx             Test nginx configuration syntax"
     echo
     echo "OPTIONS:"
     echo "  --force                Force operations without confirmation"
@@ -1596,6 +1681,21 @@ main() {
                 sudo sed -i '/# Watch Party rate limiting zones/,+3d' /etc/nginx/nginx.conf
             fi
             log_success "Nginx configuration cleaned"
+            ;;
+        force-clean-nginx)
+            force_clean_nginx
+            ;;
+        restore-nginx-configs)
+            restore_nginx_configs
+            ;;
+        force-fix-nginx)
+            force_clean_nginx
+            configure_nginx_global
+            configure_nginx
+            sudo systemctl reload nginx
+            ;;
+        test-nginx)
+            sudo nginx -t
             ;;
         help|--help|-h)
             show_help
