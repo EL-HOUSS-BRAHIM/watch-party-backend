@@ -28,7 +28,19 @@ A complete set of specialized scripts for different aspects of project managemen
 - Environment configuration
 - Development tools setup (pre-commit hooks, linting)
 
-#### 3. **Backup Script** (`backup.sh`)
+#### 3. **Production Script** (`production.sh`) - Enhanced
+- **Complete production server setup** with all dependencies
+- **Directory structure validation and auto-fix** ✨ NEW
+- **Port conflict detection and resolution**
+- **Environment configuration validation**
+- **Nginx configuration with proper log paths**
+- **PostgreSQL and Redis setup**
+- **Systemd service creation and management**
+- **Security configuration** (firewall, fail2ban)
+- **Service status monitoring and health checks**
+- **Backup and maintenance operations**
+
+#### 4. **Backup Script** (`backup.sh`)
 - **Full project backups** with compression
 - **Database-only backups**
 - **Selective backup options** (exclude media, include logs)
@@ -36,7 +48,7 @@ A complete set of specialized scripts for different aspects of project managemen
 - **Backup management** (list, cleanup old backups)
 - **Backup manifest** with metadata
 
-#### 4. **Cleanup Script** (`cleanup.sh`)
+#### 5. **Cleanup Script** (`cleanup.sh`)
 - **Multiple cleanup levels**: standard, deep, security, dev, production
 - **Disk usage analysis**
 - **Interactive cleanup menu**
@@ -44,7 +56,7 @@ A complete set of specialized scripts for different aspects of project managemen
 - **Security cleanup** (removes sensitive files)
 - **Performance optimization**
 
-#### 5. **Health Monitoring Script** (`health.sh`)
+#### 6. **Health Monitoring Script** (`health.sh`)
 - **Comprehensive health checks** (system, database, Redis, etc.)
 - **Quick status checks**
 - **Project statistics**
@@ -272,7 +284,61 @@ The management system is now ready for use! Here's what you can do next:
 4. **Create your first backup**: `./manage.sh backup`
 5. **Explore monitoring**: `./manage.sh monitor`
 
-## 📚 Documentation
+## � Recent Updates (August 11, 2025)
+
+### Production Directory Structure Fixes
+**Problem Solved**: Fixed production setup errors related to missing directories and log files:
+- `/etc/nginx/sites-enabled/watch-party` directory creation issues
+- Missing log file: `/var/www/watchparty/logs/django.log`
+
+**New Features Added**:
+- **Directory Validation Function** (`validate_and_fix_directories`)
+  - Automatically detects and creates missing directories
+  - Creates all required log files with proper permissions
+  - Ensures Nginx sites-available and sites-enabled directories exist
+  - Creates runtime directories for systemd services
+  - Sets up symbolic links for backwards compatibility
+
+- **New Commands**:
+  - `./manage.sh validate-dirs` - Validate and fix directory structure
+  - `./manage.sh fix-dirs` - Same as validate-dirs (alias)
+  - `./scripts/production.sh validate-dirs` - Direct script access
+
+**Enhanced Functions**:
+- `setup_directories()` - Now creates log files and proper symlinks
+- `configure_nginx()` - Ensures all required directories exist before configuration
+- `setup_production()` - Includes pre-validation step to fix existing issues
+
+**Directory Structure Created**:
+```
+/var/www/watchparty/          # Main application directory
+├── static/                   # Static files
+├── media/                    # Media uploads
+├── logs/                     # Backwards compatibility symlinks
+│   ├── django.log → /var/log/watchparty/django.log
+│   └── django_errors.log → /var/log/watchparty/django_errors.log
+└── ...
+
+/var/log/watchparty/          # Centralized logging
+├── django.log               # Application logs
+├── django_errors.log        # Error logs
+├── gunicorn_access.log      # Web server access
+├── gunicorn_error.log       # Web server errors
+├── celery.log               # Background worker logs
+├── celery-beat.log          # Scheduler logs
+├── nginx_access.log         # Nginx access logs
+└── nginx_error.log          # Nginx error logs
+
+/etc/nginx/
+├── sites-available/         # Available site configurations
+│   └── watchparty           # Our site config
+└── sites-enabled/           # Enabled site configurations
+    └── watchparty → ../sites-available/watchparty
+
+/var/run/watchparty/         # Runtime files (PIDs, sockets)
+```
+
+## �📚 Documentation
 
 - **Main documentation**: `scripts/README.md`
 - **Command help**: `./manage.sh help` or `./manage.sh [command] --help`
@@ -280,4 +346,4 @@ The management system is now ready for use! Here's what you can do next:
 
 ---
 
-**🎉 The Watch Party Backend now has a comprehensive, production-ready management system with 33+ commands across 9 specialized scripts, providing everything needed for development, deployment, monitoring, and maintenance!**
+**🎉 The Watch Party Backend now has a comprehensive, production-ready management system with 35+ commands across 9 specialized scripts, providing everything needed for development, deployment, monitoring, and maintenance!**

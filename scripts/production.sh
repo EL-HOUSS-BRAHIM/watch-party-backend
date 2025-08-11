@@ -482,56 +482,105 @@ validate_and_fix_directories() {
     )
     
     local fixes_needed=0
+    local errors=0
+    
+    # Temporarily disable exit on error for this function
+    set +e
     
     # Check and create directories
+    log_info "Checking directories..."
     for dir in "${required_dirs[@]}"; do
         if [[ ! -d "$dir" ]]; then
             log_warning "Missing directory: $dir"
-            sudo mkdir -p "$dir"
-            ((fixes_needed++))
+            if sudo mkdir -p "$dir" 2>/dev/null; then
+                log_success "Created directory: $dir"
+                ((fixes_needed++))
+            else
+                log_error "Failed to create directory: $dir"
+                ((errors++))
+            fi
+        else
+            echo "  ✓ Directory exists: $dir"
         fi
     done
     
     # Check and create log files
+    log_info "Checking log files..."
     for log_file in "${required_log_files[@]}"; do
         if [[ ! -f "$log_file" ]]; then
             log_warning "Missing log file: $log_file"
-            sudo touch "$log_file"
-            ((fixes_needed++))
+            # Ensure parent directory exists first
+            local log_dir=$(dirname "$log_file")
+            if [[ ! -d "$log_dir" ]]; then
+                sudo mkdir -p "$log_dir" 2>/dev/null
+            fi
+            if sudo touch "$log_file" 2>/dev/null; then
+                log_success "Created log file: $log_file"
+                ((fixes_needed++))
+            else
+                log_error "Failed to create log file: $log_file"
+                ((errors++))
+            fi
+        else
+            echo "  ✓ Log file exists: $log_file"
         fi
     done
     
     # Create symlinks for backwards compatibility if they don't exist
-    if [[ ! -L "$PRODUCTION_DIR/logs/django.log" ]]; then
-        sudo ln -sf "$LOG_DIR/django.log" "$PRODUCTION_DIR/logs/django.log" 2>/dev/null || true
-        ((fixes_needed++))
-    fi
-    
-    if [[ ! -L "$PRODUCTION_DIR/logs/django_errors.log" ]]; then
-        sudo ln -sf "$LOG_DIR/django_errors.log" "$PRODUCTION_DIR/logs/django_errors.log" 2>/dev/null || true
-        ((fixes_needed++))
+    log_info "Checking compatibility symlinks..."
+    if [[ -d "$PRODUCTION_DIR/logs" ]]; then
+        if [[ ! -L "$PRODUCTION_DIR/logs/django.log" && -f "$LOG_DIR/django.log" ]]; then
+            if sudo ln -sf "$LOG_DIR/django.log" "$PRODUCTION_DIR/logs/django.log" 2>/dev/null; then
+                log_success "Created symlink: $PRODUCTION_DIR/logs/django.log"
+                ((fixes_needed++))
+            fi
+        fi
+        
+        if [[ ! -L "$PRODUCTION_DIR/logs/django_errors.log" && -f "$LOG_DIR/django_errors.log" ]]; then
+            if sudo ln -sf "$LOG_DIR/django_errors.log" "$PRODUCTION_DIR/logs/django_errors.log" 2>/dev/null; then
+                log_success "Created symlink: $PRODUCTION_DIR/logs/django_errors.log"
+                ((fixes_needed++))
+            fi
+        fi
     fi
     
     # Fix permissions for all directories and files
-    sudo chown -R $USER:www-data "$PRODUCTION_DIR" 2>/dev/null || true
-    sudo chown -R $USER:www-data "$LOG_DIR" 2>/dev/null || true
-    sudo chown -R $USER:www-data "$CONFIG_DIR" 2>/dev/null || true
-    sudo chown -R $USER:www-data "$BACKUP_DIR" 2>/dev/null || true
-    sudo chown -R $USER:www-data /var/run/watchparty 2>/dev/null || true
+    log_info "Fixing permissions..."
+    local permission_fixes=0
     
-    sudo chmod -R 755 "$PRODUCTION_DIR" 2>/dev/null || true
-    sudo chmod -R 755 "$LOG_DIR" 2>/dev/null || true
-    sudo chmod -R 755 "$CONFIG_DIR" 2>/dev/null || true
-    sudo chmod -R 755 "$BACKUP_DIR" 2>/dev/null || true
-    sudo chmod -R 755 /var/run/watchparty 2>/dev/null || true
+    for dir in "$PRODUCTION_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR" "/var/run/watchparty"; do
+        if [[ -d "$dir" ]]; then
+            if sudo chown -R $USER:www-data "$dir" 2>/dev/null; then
+                ((permission_fixes++))
+            fi
+            if sudo chmod -R 755 "$dir" 2>/dev/null; then
+                ((permission_fixes++))
+            fi
+        fi
+    done
     
     # Set specific permissions for log files
-    sudo chmod 644 "$LOG_DIR"/*.log 2>/dev/null || true
+    if [[ -d "$LOG_DIR" ]]; then
+        sudo chmod 644 "$LOG_DIR"/*.log 2>/dev/null || true
+    fi
     
-    if [[ $fixes_needed -gt 0 ]]; then
-        log_success "Fixed $fixes_needed directory/file issues"
+    # Re-enable exit on error
+    set -e
+    
+    # Summary
+    echo
+    if [[ $errors -gt 0 ]]; then
+        log_error "Validation completed with $errors errors"
+        if [[ $fixes_needed -gt 0 ]]; then
+            log_warning "Successfully fixed $fixes_needed issues"
+        fi
+        return 1
+    elif [[ $fixes_needed -gt 0 ]]; then
+        log_success "Directory structure validation completed - Fixed $fixes_needed issues"
+        return 0
     else
-        log_success "Directory structure validation passed"
+        log_success "Directory structure validation passed - No issues found"
+        return 0
     fi
 }
 
