@@ -175,44 +175,53 @@ jobs:
                 PROJECT_DIR="${{ secrets.PROJECT_DIR || '/var/www/watch-party-backend' }}"
                 PROJECT_USER="${{ secrets.PROJECT_USER || 'watchparty' }}"
                 
-                # Stop services
-                sudo supervisorctl stop all
-                
-                # Backup current virtual environment
-                sudo -u $PROJECT_USER cp -r $PROJECT_DIR/venv $PROJECT_DIR/venv.backup
-                
-                # Update application code
-                sudo rsync -av --exclude='venv*' --exclude='.env' --exclude='logs' --exclude='static' --exclude='media' \
-                    ./ $PROJECT_DIR/
-                
-                # Update Python dependencies
-                sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/pip install -r $PROJECT_DIR/requirements.txt
-                
-                # Run Django management commands
-                cd $PROJECT_DIR
-                sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/python manage.py migrate --settings=watchparty.settings.production
-                sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/python manage.py collectstatic --noinput --settings=watchparty.settings.production
-                
-                # Update supervisor configuration
-                sudo supervisorctl reread
-                sudo supervisorctl update
-                
-                # Start services
-                sudo supervisorctl start all
-                
-                # Test deployment
-                sleep 10
-                if curl -f http://localhost:8000/health/ > /dev/null 2>&1; then
-                    echo "Deployment successful - health check passed"
-                    # Remove backup
-                    sudo rm -rf $PROJECT_DIR/venv.backup
+                # Check if this is a complete installation or needs initial setup
+                if [ ! -d "$PROJECT_DIR/venv" ] || [ ! -f "$PROJECT_DIR/manage.py" ]; then
+                    echo "Incomplete installation detected, running full deployment..."
+                    chmod +x deploy.sh
+                    sudo DOMAIN="${{ secrets.DOMAIN }}" ./deploy.sh
                 else
-                    echo "Deployment failed - rolling back"
+                    echo "Performing update deployment..."
+                    
+                    # Stop services
                     sudo supervisorctl stop all
-                    sudo -u $PROJECT_USER rm -rf $PROJECT_DIR/venv
-                    sudo -u $PROJECT_USER mv $PROJECT_DIR/venv.backup $PROJECT_DIR/venv
+                    
+                    # Backup current virtual environment
+                    sudo -u $PROJECT_USER cp -r $PROJECT_DIR/venv $PROJECT_DIR/venv.backup
+                    
+                    # Update application code
+                    sudo rsync -av --exclude='venv*' --exclude='.env' --exclude='logs' --exclude='static' --exclude='media' \
+                        ./ $PROJECT_DIR/
+                    
+                    # Update Python dependencies
+                    sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/pip install -r $PROJECT_DIR/requirements.txt
+                    
+                    # Run Django management commands
+                    cd $PROJECT_DIR
+                    sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/python manage.py migrate --settings=watchparty.settings.production
+                    sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/python manage.py collectstatic --noinput --settings=watchparty.settings.production
+                    
+                    # Update supervisor configuration
+                    sudo supervisorctl reread
+                    sudo supervisorctl update
+                    
+                    # Start services
                     sudo supervisorctl start all
-                    exit 1
+                    
+                    # Test deployment
+                    sleep 10
+                    if curl -f http://localhost:8000/health/ > /dev/null 2>&1; then
+                        echo "Deployment successful - health check passed"
+                        # Remove backup
+                        sudo rm -rf $PROJECT_DIR/venv.backup
+                    else
+                        echo "Deployment failed - rolling back"
+                        sudo supervisorctl stop all
+                        sudo -u $PROJECT_USER rm -rf $PROJECT_DIR/venv
+                        sudo -u $PROJECT_USER mv $PROJECT_DIR/venv.backup $PROJECT_DIR/venv
+                        sudo supervisorctl start all
+                        exit 1
+                    fi
                 fi
             fi
             
