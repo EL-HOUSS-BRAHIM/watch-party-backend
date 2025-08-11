@@ -25,7 +25,6 @@ click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
 constantly==23.10.4
-coverage==7.9.2
 cryptography==45.0.5
 daphne==4.0.0
 distlib==0.4.0
@@ -104,9 +103,6 @@ pyOpenSSL==25.1.0
 pyotp==2.9.0
 pyparsing==3.2.3
 pypng==0.20220715.0
-pytest==8.4.1
-pytest-cov==6.2.1
-pytest-django==4.11.1
 python-dateutil==2.9.0.post0
 python-decouple==3.8
 python-magic==0.4.27
