@@ -1,9 +1,8 @@
 import logging
 from datetime import timedelta
-from typing import Dict, List
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Avg, Q
+from django.db.models import Count, Avg
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -19,7 +18,7 @@ from .models import (
 from .serializers import (
     LiveReactionSerializer, VoiceChatRoomSerializer, VoiceChatParticipantSerializer,
     ScreenShareSerializer, InteractivePollSerializer, PollResponseSerializer,
-    InteractiveAnnotationSerializer, InteractiveSessionSerializer
+    InteractiveAnnotationSerializer
 )
 
 User = get_user_model()

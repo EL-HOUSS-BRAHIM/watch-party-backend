@@ -8,7 +8,6 @@ import boto3
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from django.conf import settings
-from django.core.files.storage import default_storage
 from django.core.cache import cache
 from core.exceptions import VideoError, StorageError
 from core.utils import (

@@ -4,15 +4,10 @@ Provides unified interface for multiple cloud storage providers
 """
 
 import os
-import uuid
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 from django.conf import settings
-from io import BytesIO
-import json
 import logging
-from urllib.parse import urlparse
-from datetime import datetime, timedelta
 
 # Optional imports for different cloud providers
 try:
@@ -67,17 +62,14 @@ logger = logging.getLogger(__name__)
 
 class StorageServiceError(Exception):
     """Base exception for storage service errors"""
-    pass
 
 
 class StorageQuotaExceededError(StorageServiceError):
     """Raised when storage quota is exceeded"""
-    pass
 
 
 class FileNotFoundError(StorageServiceError):
     """Raised when file is not found in storage"""
-    pass
 
 
 class BaseStorageService(ABC):
@@ -91,47 +83,38 @@ class BaseStorageService(ABC):
     @abstractmethod
     def _initialize_client(self):
         """Initialize the storage client"""
-        pass
     
     @abstractmethod
     def upload_file(self, file_path: str, file_name: str, folder_id: str = None) -> Dict[str, Any]:
         """Upload file to storage"""
-        pass
     
     @abstractmethod
     def download_file(self, file_id: str, destination_path: str) -> bool:
         """Download file from storage"""
-        pass
     
     @abstractmethod
     def get_file_info(self, file_id: str) -> Dict[str, Any]:
         """Get file metadata"""
-        pass
     
     @abstractmethod
     def delete_file(self, file_id: str) -> bool:
         """Delete file from storage"""
-        pass
     
     @abstractmethod
     def list_files(self, folder_id: str = None, limit: int = 100) -> List[Dict[str, Any]]:
         """List files in folder"""
-        pass
     
     @abstractmethod
     def create_folder(self, folder_name: str, parent_folder_id: str = None) -> Dict[str, Any]:
         """Create a new folder"""
-        pass
     
     @abstractmethod
     def get_streaming_url(self, file_id: str, expires_in: int = 3600) -> str:
         """Get streaming URL for video files"""
-        pass
     
     @abstractmethod
     def get_storage_quota(self) -> Dict[str, Any]:
         """Get storage quota information"""
-        pass
 
 
 class GoogleDriveStorage(BaseStorageService):
@@ -632,7 +615,7 @@ def get_user_storage_services(user):
                 'service': service,
                 'connected_at': connection.created_at
             })
-        except Exception as e:
+        except Exception:
             # Log error but continue with other services
             pass
     

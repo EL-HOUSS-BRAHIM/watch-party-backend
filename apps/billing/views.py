@@ -18,8 +18,8 @@ from .models import (
 )
 from .serializers import (
     SubscriptionPlanSerializer, SubscriptionSerializer, PaymentMethodSerializer,
-    InvoiceSerializer, PaymentSerializer, BillingAddressSerializer,
-    PromotionalCodeSerializer, StripeSubscriptionCreateSerializer
+    InvoiceSerializer, BillingAddressSerializer, PromotionalCodeSerializer,
+    StripeSubscriptionCreateSerializer
 )
 
 User = get_user_model()

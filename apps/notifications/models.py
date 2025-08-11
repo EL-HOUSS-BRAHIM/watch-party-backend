@@ -6,7 +6,6 @@ import uuid
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.core.mail import send_mail
 from django.template import Template, Context
 from apps.parties.models import WatchParty
 from apps.videos.models import Video

@@ -5,12 +5,10 @@ Enhanced Party Views for Watch Party Backend
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Q, Count, Avg, F
+from django.db.models import Count, F
 from django.shortcuts import get_object_or_404
 from datetime import timedelta
-import secrets
 
 from core.responses import StandardResponse
 from .models import WatchParty, PartyEngagementAnalytics, PartyParticipant

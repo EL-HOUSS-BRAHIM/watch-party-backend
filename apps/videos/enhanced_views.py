@@ -10,8 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from services.video_service import video_storage_service, video_processing_service, video_streaming_service
-from .models import Video, VideoProcessing, VideoStreamingUrl
-from .serializers import VideoSerializer
+from .models import Video
 from core.exceptions import VideoError
 
 
@@ -48,7 +47,7 @@ class S3VideoUploadView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        except Exception:
             return Response({
                 'error': 'Failed to generate upload URL'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -91,7 +90,7 @@ class VideoStreamingUrlView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        except Exception:
             return Response({
                 'error': 'Failed to generate streaming URL'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -141,7 +140,7 @@ class VideoThumbnailView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        except Exception:
             return Response({
                 'error': 'Failed to generate thumbnail'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -187,7 +186,7 @@ class VideoAnalyticsView(APIView):
                 'status': video.status
             }, status=status.HTTP_200_OK)
             
-        except Exception as e:
+        except Exception:
             return Response({
                 'error': 'Failed to get video analytics'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -219,7 +218,7 @@ def validate_video_url(request):
             'valid': False,
             'error': str(e)
         }, status=status.HTTP_200_OK)
-    except Exception as e:
+    except Exception:
         return Response({
             'error': 'Failed to validate URL'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

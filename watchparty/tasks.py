@@ -4,8 +4,6 @@ Background tasks for the Watch Party platform
 
 from celery import shared_task
 from django.core.management import call_command
-from django.utils import timezone
-from datetime import timedelta
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,7 +26,7 @@ def send_test_email():
     """Test task to verify Celery is working"""
     from utils.email_service import EmailService
     
-    email_service = EmailService()
+    EmailService()
     # This is just a test - in production you'd have proper recipients
     logger.info("Test Celery task executed successfully")
     return "Test email task completed"

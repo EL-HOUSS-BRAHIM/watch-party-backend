@@ -9,8 +9,6 @@ from django.core.files.storage import default_storage
 from django.conf import settings
 from celery import shared_task
 from datetime import timedelta
-import boto3
-from botocore.exceptions import ClientError
 
 from apps.videos.models import Video, VideoProcessing, VideoStreamingUrl
 from apps.analytics.models import AnalyticsEvent
@@ -63,7 +61,7 @@ class VideoProcessor:
             
             # Step 2: Extract metadata
             self.update_progress(20, "Extracting metadata")
-            metadata = self.extract_metadata()
+            self.extract_metadata()
             
             # Step 3: Generate thumbnail
             self.update_progress(30, "Generating thumbnail")
@@ -245,7 +243,7 @@ class VideoProcessor:
     def process_multiple_qualities(self):
         """Process video in multiple quality levels"""
         try:
-            original_width = self.video.width or 1920
+            self.video.width or 1920
             original_height = self.video.height or 1080
             
             processed_qualities = []

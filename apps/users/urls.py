@@ -3,7 +3,6 @@ User URLs for Watch Party Backend
 """
 
 from django.urls import path
-from rest_framework.routers import DefaultRouter
 from . import views
 from . import social_views
 

@@ -1,10 +1,9 @@
 import requests
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, Optional
-from urllib.parse import urlencode, parse_qs, urlparse
+from datetime import timedelta
+from typing import Dict
+from urllib.parse import urlencode
 
-from django.conf import settings
 from django.utils import timezone
 
 from ..models import SocialOAuthProvider, UserServiceConnection

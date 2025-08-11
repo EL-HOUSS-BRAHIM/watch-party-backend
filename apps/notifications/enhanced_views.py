@@ -2,28 +2,19 @@
 Enhanced notifications views for Watch Party Backend
 """
 
-from rest_framework import generics, permissions, status
+from rest_framework import permissions, status
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view, permission_classes
-from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db.models import Q, Count, Avg, F
+from django.db.models import Q
 from django.db import transaction
 from datetime import timedelta, datetime
-import json
 
 from core.responses import StandardResponse
 from core.permissions import IsAdminUser
 from .models import (
     Notification, NotificationPreference, NotificationTemplate, 
-    NotificationDelivery, NotificationBatch, NotificationAnalytics,
-    NotificationChannel, PushSubscription
-)
-from .serializers import (
-    NotificationSerializer, NotificationPreferencesSerializer, 
-    NotificationTemplateSerializer, NotificationCreateSerializer,
-    NotificationBatchSerializer, NotificationAnalyticsSerializer
+    NotificationBatch, NotificationAnalytics, PushSubscription
 )
 
 User = get_user_model()

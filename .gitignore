@@ -67,7 +67,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+# docs/_build/ (removed - we use different docs structure)
 
 # PyBuilder
 target/
@@ -125,7 +125,7 @@ dmypy.json
 # Django specific
 staticfiles/
 mediafiles/
-logs/
+# Logs
 *.log
 
 # IDE

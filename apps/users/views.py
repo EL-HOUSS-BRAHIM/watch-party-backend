@@ -2,14 +2,11 @@
 User views for Watch Party Backend
 """
 
-from rest_framework import status, permissions, generics
+from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import get_user_model
-from django.db import models
 from django.db.models import Q
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from .models import Friendship, UserActivity, UserSettings
@@ -925,7 +922,6 @@ class UserStatsView(APIView):
         # Calculate various statistics
         from apps.videos.models import Video
         from apps.parties.models import WatchParty
-        from django.db.models import Sum, Count
         
         # Basic counts
         videos_uploaded = Video.objects.filter(uploader=user).count()
@@ -939,7 +935,7 @@ class UserStatsView(APIView):
         
         # Store statistics (if available)
         try:
-            from apps.store.models import UserCurrency, UserInventory, UserAchievement
+            from apps.store.models import UserInventory, UserAchievement
             currency = getattr(user, 'currency', None)
             currency_balance = currency.balance if currency else 0
             items_owned = UserInventory.objects.filter(user=user).count()
@@ -1206,7 +1202,7 @@ class UserInventoryView(APIView):
     def get(self, request):
         """Get user's inventory"""
         try:
-            from apps.store.models import UserInventory, UserCurrency
+            from apps.store.models import UserInventory
             from apps.store.serializers import UserInventorySerializer, UserCurrencySerializer
             
             user = request.user

@@ -7,7 +7,6 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
 from datetime import timedelta
-import uuid
 import secrets
 
 from .models import User, UserProfile, EmailVerification, PasswordReset, SocialAccount

@@ -4,10 +4,7 @@ Phase 2 implementation with frame-perfect sync and advanced controls
 """
 
 import json
-import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
@@ -285,7 +282,7 @@ class VideoSyncConsumer(AsyncWebsocketConsumer):
     async def handle_heartbeat(self, data):
         """Handle client heartbeat"""
         client_time = data.get('client_time', 0)
-        client_playing = data.get('is_playing', False)
+        data.get('is_playing', False)
         
         # Calculate drift and send correction if needed
         server_time = self.calculate_expected_time()

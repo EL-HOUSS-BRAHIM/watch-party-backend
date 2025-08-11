@@ -2,10 +2,9 @@
 Enhanced social features API views for Users app
 """
 
-from rest_framework import generics, permissions, status
+from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 
 from services.social_service import social_service

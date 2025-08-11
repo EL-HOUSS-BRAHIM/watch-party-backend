@@ -3,12 +3,11 @@ Advanced analytics dashboard views
 """
 
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from django.db.models import Count, Avg, Sum, Q, F, Case, When, Value, IntegerField
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Avg
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 
 from core.responses import StandardResponse
 from core.api_documentation import api_response_documentation
@@ -55,8 +54,6 @@ class PersonalAnalyticsView(APIView):
         from apps.videos.models import Video
         from apps.analytics.models import AnalyticsEvent
         from apps.chat.models import ChatMessage
-        from apps.social.models import GroupMembership
-        from apps.store.models import UserInventory, UserAchievement
         
         # Basic user stats
         hosted_parties = WatchParty.objects.filter(
@@ -179,7 +176,6 @@ class PersonalAnalyticsView(APIView):
         """Calculate social interaction metrics"""
         from apps.social.models import GroupMembership, GroupPost
         from apps.messaging.models import Message
-        from apps.authentication.models import User
         
         # Group activities
         group_memberships = GroupMembership.objects.filter(
@@ -268,7 +264,6 @@ class PersonalAnalyticsView(APIView):
     
     def calculate_user_interests(self, user, start_date, end_date):
         """Calculate user interests based on activity"""
-        from apps.videos.models import Video
         from apps.analytics.models import AnalyticsEvent
         
         # Video categories watched

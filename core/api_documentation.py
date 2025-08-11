@@ -6,9 +6,8 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiPara
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular import openapi
-from rest_framework import serializers, status
+from rest_framework import serializers
 from django.utils import timezone
-import json
 
 
 class EnhancedAutoSchema(AutoSchema):

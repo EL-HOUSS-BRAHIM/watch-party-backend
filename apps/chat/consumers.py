@@ -4,14 +4,12 @@ WebSocket consumers for real-time chat functionality
 
 import json
 import logging
-from datetime import timedelta
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.core.exceptions import ObjectDoesNotExist
-from .models import ChatRoom, ChatMessage, ChatBan
+from .models import ChatRoom, ChatMessage
 from .serializers import ChatMessageSerializer, UserBasicSerializer
 
 User = get_user_model()
@@ -521,7 +519,7 @@ class TestWebSocketConsumer(AsyncWebsocketConsumer):
         """Handle incoming WebSocket messages"""
         try:
             data = json.loads(text_data)
-            message_type = data.get('type', 'message')
+            data.get('type', 'message')
             
             # Echo back the message with some additional info
             await self.send(text_data=json.dumps({

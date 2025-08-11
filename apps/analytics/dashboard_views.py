@@ -2,15 +2,15 @@
 Analytics dashboard API views for Watch Party Backend
 """
 
-from rest_framework import generics, permissions, status
+from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db.models import Sum, Avg, Count, Q, F
-from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
-from datetime import timedelta, date
+from django.db.models import Sum, Avg, Count, Q
+from django.db.models.functions import TruncDate, TruncMonth
+from datetime import timedelta
 from decimal import Decimal
 from typing import Dict, List, Any
 
@@ -21,7 +21,6 @@ from apps.analytics.models import (
 from apps.parties.models import WatchParty
 from apps.videos.models import Video
 from apps.billing.models import Subscription, Payment
-from apps.users.models import User as CustomUser
 from core.permissions import IsAdminUser
 
 User = get_user_model()

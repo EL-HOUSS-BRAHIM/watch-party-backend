@@ -6,8 +6,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
     Notification, NotificationPreferences, NotificationTemplate, 
-    NotificationDelivery, NotificationChannel, PushSubscription,
-    NotificationBatch, NotificationAnalytics
+    NotificationDelivery, NotificationBatch
 )
 
 User = get_user_model()

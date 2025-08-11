@@ -5,10 +5,8 @@ Support System Views for Watch Party Backend
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.response import Response
-from django.db.models import Q, F, Count
+from django.db.models import Q, F
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 
 from core.responses import StandardResponse
 from .models import (

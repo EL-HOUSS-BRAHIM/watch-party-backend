@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from core.exceptions import AuthenticationError
-from core.utils import generate_secure_token, create_cache_key
+from core.utils import create_cache_key
 
 User = get_user_model()
 
@@ -103,7 +103,7 @@ class AuthenticationService:
                     # Only blacklist if token hasn't expired
                     cache_key = create_cache_key('blacklisted_token', hashlib.md5(token.encode()).hexdigest())
                     cache.set(cache_key, True, timeout=int(remaining_time.total_seconds()))
-        except Exception as e:
+        except Exception:
             # If we can't decode the token, we can't blacklist it effectively
             pass
     

@@ -4,7 +4,6 @@ Enhanced WebSocket consumers for real-time features
 
 import json
 import asyncio
-from datetime import datetime, timedelta
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model

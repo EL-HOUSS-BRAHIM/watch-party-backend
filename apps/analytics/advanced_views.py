@@ -4,24 +4,15 @@ Phase 2 implementation with real-time dashboards and advanced metrics
 """
 
 from rest_framework import generics, permissions, status
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db.models import Sum, Avg, Count, Q, F, Max
-from django.db.models.functions import TruncDate, TruncHour
+from django.db.models import Sum, Avg, Count
 from django.db import models
-from datetime import timedelta, datetime, date
+from datetime import timedelta, datetime
 from typing import Dict, Any, List
-import json
 
-from .models import UserAnalytics, PartyAnalytics, VideoAnalytics, AnalyticsEvent, SystemAnalytics
-from .serializers import (
-    UserAnalyticsSerializer, PartyAnalyticsSerializer, VideoAnalyticsSerializer,
-    AnalyticsEventSerializer, SystemAnalyticsSerializer, RealTimeDashboardSerializer,
-    AdvancedAnalyticsQuerySerializer, A_BTestResultSerializer, PredictiveAnalyticsSerializer
-)
+from .models import UserAnalytics, PartyAnalytics, VideoAnalytics, AnalyticsEvent
 from apps.parties.models import WatchParty
 from apps.videos.models import Video
 from apps.authentication.models import User
@@ -118,10 +109,8 @@ class RealTimeDashboardView(generics.GenericAPIView):
         """Get active users over time"""
         # Group by hour for detailed view
         if (end_time - start_time).days <= 1:
-            trunc_func = TruncHour
             format_key = '%Y-%m-%d %H:00'
         else:
-            trunc_func = TruncDate
             format_key = '%Y-%m-%d'
         
         active_users_data = AnalyticsEvent.objects.filter(

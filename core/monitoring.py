@@ -3,14 +3,10 @@ Advanced monitoring and alerting system
 """
 
 import asyncio
-import smtplib
 import logging
 import psutil
 import time
-import json
 from datetime import timedelta, datetime
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum

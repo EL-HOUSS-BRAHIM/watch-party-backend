@@ -6,10 +6,8 @@ import logging
 from celery import shared_task
 from django.core.cache import cache
 from django.utils import timezone
-from django.db import transaction, models
-from django.apps import apps
+from django.db import models
 from datetime import timedelta, datetime
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,7 @@ def process_search_analytics(self, date_str=None):
     Process and aggregate search analytics data
     """
     try:
-        from apps.search.models import SearchQuery, SearchAnalytics, TrendingQuery
+        from apps.search.models import SearchQuery, SearchAnalytics
         
         if date_str:
             date = datetime.fromisoformat(date_str).date()

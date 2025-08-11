@@ -5,15 +5,13 @@ Views for Global Search functionality with enhanced features
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from django.db.models import Q, Count, F, Case, When, IntegerField, Value, Avg
+from django.db.models import Q, Count, F
 from django.apps import apps
 from django.utils import timezone
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from django.core.cache import cache
-from django.db import transaction
 from datetime import timedelta
 import time
-import json
 
 from core.responses import StandardResponse
 from .models import SearchQuery as SearchQueryModel, SavedSearch, TrendingQuery, SearchSuggestion, SearchAnalytics
@@ -373,7 +371,7 @@ class SearchSuggestionsView(APIView):
     def post(self, request):
         """Track suggestion click"""
         suggestion_id = request.data.get('suggestion_id')
-        suggestion_text = request.data.get('text')
+        request.data.get('text')
         
         if suggestion_id:
             try:

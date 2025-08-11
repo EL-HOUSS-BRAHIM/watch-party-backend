@@ -4,7 +4,7 @@ Video serializers for Watch Party Backend
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Video, VideoLike, VideoComment, VideoView, VideoUpload
+from .models import Video, VideoLike, VideoComment, VideoUpload
 
 User = get_user_model()
 

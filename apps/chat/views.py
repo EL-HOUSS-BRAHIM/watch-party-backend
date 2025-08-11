@@ -8,13 +8,11 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db.models import Q, Count
 from .models import ChatRoom, ChatMessage, ChatModerationLog, ChatBan
 from .serializers import (
     ChatRoomSerializer, ChatMessageSerializer, ChatMessageCreateSerializer,
     ChatModerationLogSerializer, ChatBanSerializer, ChatRoomStatsSerializer
 )
-from apps.parties.models import WatchParty
 
 User = get_user_model()
 

@@ -4,12 +4,10 @@ Security configuration management and validation script
 """
 
 import os
-import sys
 import secrets
 import string
 from pathlib import Path
 import subprocess
-import hashlib
 import json
 from datetime import datetime
 

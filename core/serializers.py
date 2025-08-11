@@ -4,8 +4,6 @@ Provides consistent serialization for all API responses
 """
 
 from rest_framework import serializers
-from django.utils import timezone
-from typing import Any, Dict, List, Optional
 
 
 class StandardResponseSerializer(serializers.Serializer):

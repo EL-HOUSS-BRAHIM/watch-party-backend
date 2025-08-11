@@ -4,15 +4,15 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Count
+from django.db.models import Q
 from django.utils import timezone
 from django.db import transaction
 
-from .models import Event, EventAttendee, EventInvitation, EventReminder
+from .models import Event, EventAttendee, EventInvitation
 from .serializers import (
     EventListSerializer, EventDetailSerializer, EventCreateUpdateSerializer,
-    EventJoinLeaveSerializer, EventRSVPSerializer, EventAttendeeSerializer,
-    EventInvitationSerializer, EventSearchSerializer, EventReminderSerializer
+    EventRSVPSerializer, EventAttendeeSerializer, EventInvitationSerializer,
+    EventSearchSerializer
 )
 
 User = get_user_model()

@@ -4,10 +4,10 @@ Advanced video analytics service for Watch Party Backend
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Sum, Avg, Q, F
-from django.db.models.functions import Extract, TruncDate, TruncHour
+from django.db.models.functions import Extract
 from django.utils import timezone
 from apps.videos.models import Video, VideoView
 from apps.parties.models import WatchParty, PartyParticipant

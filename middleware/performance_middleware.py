@@ -3,7 +3,6 @@ Enhanced Performance monitoring middleware for API endpoints with rate limiting 
 """
 
 import time
-import json
 import gzip
 import hashlib
 from io import BytesIO

@@ -2,10 +2,7 @@
 Enhanced API documentation and schema generation - Backup of original
 """
 
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
-from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
-from django.utils import timezone
 
 
 # Custom serializers for documentation

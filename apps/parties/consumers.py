@@ -10,9 +10,7 @@ from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.core.exceptions import ObjectDoesNotExist
 from .models import WatchParty, PartyParticipant, PartyReaction
-from .serializers import WatchPartySerializer, PartyParticipantSerializer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

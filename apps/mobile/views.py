@@ -26,7 +26,7 @@ class MobileAppConfigView(APIView):
     )
     def get(self, request):
         """Get mobile app configuration"""
-        app_version = request.headers.get('X-App-Version', '1.0.0')
+        request.headers.get('X-App-Version', '1.0.0')
         platform = request.headers.get('X-Platform', 'unknown')  # ios, android
         
         config = {
@@ -384,7 +384,7 @@ class MobileOfflineSyncView(APIView):
     
     def sync_parties(self, user, last_sync):
         """Sync party data"""
-        from apps.parties.models import WatchParty, PartyParticipant
+        from apps.parties.models import WatchParty
         
         updated_parties = WatchParty.objects.filter(
             Q(host=user) | Q(participants__user=user, participants__is_active=True),

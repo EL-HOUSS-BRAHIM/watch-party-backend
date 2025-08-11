@@ -11,4 +11,4 @@ class AuthenticationConfig(AppConfig):
     verbose_name = 'Authentication'
 
     def ready(self):
-        import apps.authentication.signals
+        pass

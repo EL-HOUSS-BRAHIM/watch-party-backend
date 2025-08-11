@@ -2,15 +2,11 @@
 Advanced Analytics Views for Watch Party Backend
 """
 
-from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from django.db.models import Q, Count, Sum, Avg, F, Max, Min
-from django.db.models.functions import TruncDate, TruncHour
+from django.db.models import Q, Count, Sum, Avg, F
 from django.utils import timezone
-from datetime import timedelta, datetime
-import json
+from datetime import timedelta
 
 from core.responses import StandardResponse
 from core.permissions import IsAdminUser
@@ -589,7 +585,7 @@ def _get_content_ratings_distribution():
 def _calculate_store_revenue(start_date):
     """Calculate store revenue metrics"""
     try:
-        from apps.store.models import StoreItem, Purchase
+        from apps.store.models import Purchase
         
         purchases = Purchase.objects.filter(
             created_at__gte=start_date,

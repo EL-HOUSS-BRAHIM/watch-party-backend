@@ -131,7 +131,6 @@ class ValidationMixin:
     def perform_validation(self, serializer):
         """Perform custom validation"""
         # Override in subclasses for custom validation logic
-        pass
     
     def create(self, request, *args, **kwargs):
         """Create with custom validation"""

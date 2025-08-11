@@ -4,7 +4,7 @@ Optimized serializers for better API performance
 
 from rest_framework import serializers
 from django.core.cache import cache
-from django.db.models import Prefetch, Count, Q
+from django.db.models import Count, Q
 from django.apps import apps
 import hashlib
 import json

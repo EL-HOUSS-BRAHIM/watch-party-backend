@@ -1,15 +1,10 @@
-import os
 import boto3
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, BinaryIO
-from urllib.parse import urlparse
+from datetime import datetime
+from typing import Dict, List, BinaryIO
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from django.conf import settings
-from django.core.files.storage import Storage
-from django.core.files.base import ContentFile
-from django.utils import timezone
 
 from ..models import AWSS3Configuration
 

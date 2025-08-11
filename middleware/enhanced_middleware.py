@@ -7,7 +7,7 @@ import json
 import time
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
@@ -15,8 +15,6 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db import connection
-import hashlib
-import re
 
 
 User = get_user_model()

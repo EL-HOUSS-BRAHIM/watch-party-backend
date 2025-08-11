@@ -2,10 +2,7 @@
 Advanced integration framework for third-party services
 """
 
-import asyncio
 import aiohttp
-import json
-import requests
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
@@ -13,7 +10,6 @@ from enum import Enum
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
-from datetime import timedelta
 import logging
 
 logger = logging.getLogger(__name__)
@@ -103,17 +99,14 @@ class BaseIntegration(ABC):
     @abstractmethod
     async def test_connection(self) -> bool:
         """Test the integration connection"""
-        pass
     
     @abstractmethod
     async def get_capabilities(self) -> List[str]:
         """Get list of capabilities this integration supports"""
-        pass
 
 
 class IntegrationError(Exception):
     """Custom exception for integration errors"""
-    pass
 
 
 class StreamingIntegration(BaseIntegration):

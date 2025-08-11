@@ -2,17 +2,15 @@
 Notification service for Watch Party Backend
 """
 
-import json
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from datetime import timedelta
+from typing import Dict, List, Any
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
-from django.template.loader import render_to_string
 from django.utils import timezone
 from apps.notifications.models import (
-    Notification, NotificationTemplate, NotificationChannel, PushSubscription
+    Notification, NotificationTemplate, NotificationChannel
 )
 
 User = get_user_model()

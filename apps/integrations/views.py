@@ -10,7 +10,7 @@ import asyncio
 
 from core.responses import StandardResponse
 from core.api_documentation import api_response_documentation
-from core.integrations import integration_manager, IntegrationType, IntegrationConfig
+from core.integrations import integration_manager, IntegrationType
 
 
 @api_view(['GET'])

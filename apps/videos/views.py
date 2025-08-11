@@ -2,11 +2,10 @@
 Video views for Watch Party Backend
 """
 
-import uuid
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Q, F
-from django.http import Http404, FileResponse, HttpResponse, HttpResponseRedirect
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status, generics, permissions, filters
 from rest_framework.decorators import action, api_view, permission_classes
@@ -20,10 +19,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import Video, VideoLike, VideoComment, VideoView, VideoUpload
 from .serializers import (
     VideoSerializer, VideoDetailSerializer, VideoCreateSerializer,
-    VideoUpdateSerializer, VideoCommentSerializer, VideoLikeSerializer,
-    VideoUploadSerializer, VideoUploadCreateSerializer, VideoSearchSerializer
+    VideoUpdateSerializer, VideoCommentSerializer, VideoUploadSerializer,
+    VideoUploadCreateSerializer, VideoSearchSerializer
 )
-from core.permissions import IsOwnerOrReadOnly, IsPremiumUserForPremiumContent, IsAdminUser
+from core.permissions import IsOwnerOrReadOnly, IsAdminUser
 
 
 class VideoViewSet(ModelViewSet):
@@ -103,14 +102,12 @@ class VideoViewSet(ModelViewSet):
             if like_obj.is_like == is_like:
                 # Remove like/dislike if clicking same action
                 like_obj.delete()
-                is_liked = False
             else:
                 # Update like/dislike
                 like_obj.is_like = is_like
                 like_obj.save()
-                is_liked = is_like
         else:
-            is_liked = is_like
+            pass
         
         # Update like count
         like_count = video.likes.filter(is_like=True).count()
@@ -958,7 +955,7 @@ def channel_analytics_dashboard(request):
     
     try:
         from services.video_analytics_service import video_analytics_service
-        from django.db.models import Count, Sum, Avg
+        from django.db.models import Count, Sum
         
         # Get user's videos
         user_videos = Video.objects.filter(uploader=user)
@@ -1184,7 +1181,7 @@ class VideoSearchEnhancedView(APIView):
             category = request.GET.get('category', '')
             duration_min = request.GET.get('duration_min', 0)
             duration_max = request.GET.get('duration_max', 7200)  # 2 hours max
-            quality = request.GET.get('quality', '')
+            request.GET.get('quality', '')
             date_from = request.GET.get('date_from', '')
             date_to = request.GET.get('date_to', '')
             sort_by = request.GET.get('sort_by', 'relevance')

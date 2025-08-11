@@ -3,9 +3,8 @@ Google Drive Service for Watch Party Backend
 Handles Google Drive API interactions for movie management
 """
 
-import os
 import logging
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Any
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build

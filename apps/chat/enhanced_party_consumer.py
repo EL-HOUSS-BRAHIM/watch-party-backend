@@ -6,14 +6,10 @@ Implements frontend-compatible message formats and comprehensive sync
 import json
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.core.cache import cache
-from django.core.exceptions import ObjectDoesNotExist
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

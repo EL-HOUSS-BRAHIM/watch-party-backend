@@ -5,7 +5,7 @@ Analytics tasks for Watch Party Backend
 from celery import shared_task
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Avg, Sum, F, Q
+from django.db.models import Count, Avg, Sum, F
 from datetime import datetime, timedelta
 import json
 import logging

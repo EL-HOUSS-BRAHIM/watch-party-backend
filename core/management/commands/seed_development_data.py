@@ -4,7 +4,7 @@ This creates users, parties, videos, chat messages, and more for testing
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password

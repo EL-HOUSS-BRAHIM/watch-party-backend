@@ -5,7 +5,6 @@ Utility functions for Watch Party Backend
 import secrets
 import string
 import hashlib
-import uuid
 from datetime import datetime, timedelta
 from django.utils import timezone
 from django.core.cache import cache

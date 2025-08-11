@@ -9,8 +9,6 @@ from datetime import datetime
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 from rest_framework.views import exception_handler
-from rest_framework import status
-from core.responses import StandardResponse
 
 logger = logging.getLogger('watchparty.errors')
 

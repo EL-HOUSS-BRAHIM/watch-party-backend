@@ -2,10 +2,7 @@
 Views for Store app
 """
 
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -15,13 +12,12 @@ from django.db import models
 from core.responses import StandardResponse
 from .models import (
     StoreItem, UserInventory, Achievement, UserAchievement,
-    Reward, UserRewardClaim, UserCurrency, CurrencyTransaction
+    Reward, UserRewardClaim, UserCurrency
 )
 from .serializers import (
     StoreItemSerializer, UserInventorySerializer, AchievementSerializer,
     UserAchievementSerializer, RewardSerializer, UserRewardClaimSerializer,
-    UserCurrencySerializer, CurrencyTransactionSerializer, PurchaseItemSerializer,
-    ClaimRewardSerializer, UserStatsSerializer
+    UserCurrencySerializer, PurchaseItemSerializer
 )
 
 

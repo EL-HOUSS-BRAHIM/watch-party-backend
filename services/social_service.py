@@ -3,16 +3,13 @@ Enhanced Social Features Service for Watch Party Backend
 """
 
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Count, Prefetch
+from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import logging
 
 from apps.users.models import Friendship, UserActivity
-from apps.parties.models import WatchParty
-from apps.videos.models import Video
-from apps.analytics.models import AnalyticsEvent
 from services.notification_service import notification_service
 
 User = get_user_model()

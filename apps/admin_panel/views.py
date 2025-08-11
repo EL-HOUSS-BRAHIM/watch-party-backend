@@ -2,21 +2,20 @@
 Admin panel views for Watch Party Backend
 """
 
-from rest_framework import generics, permissions, status
+from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db.models import Q, Count, Sum, Avg, F
+from django.db.models import Q, Count, Sum
 from django.db import transaction
 from django.http import HttpResponse
 from django.core.mail import send_mass_mail
 from datetime import timedelta
-from typing import Dict, List, Any
+from typing import Dict, Any
 import csv
-import json
 
 from core.permissions import IsAdminUser, IsSuperUser
 from core.responses import StandardResponse
@@ -745,7 +744,7 @@ def admin_analytics_overview(request):
     """Get comprehensive analytics overview for admin dashboard"""
     
     try:
-        from apps.analytics.models import SystemAnalytics, UserAnalytics, VideoAnalytics
+        from apps.analytics.models import SystemAnalytics, VideoAnalytics
         
         # Get latest system analytics
         latest_system_analytics = SystemAnalytics.objects.order_by('-date').first()
@@ -878,7 +877,6 @@ def admin_system_health(request):
     
     try:
         import psutil
-        import os
         
         # System metrics
         cpu_percent = psutil.cpu_percent(interval=1)
@@ -1420,7 +1418,6 @@ def admin_system_health(request):
     
     try:
         import psutil
-        import os
         
         # System metrics
         cpu_percent = psutil.cpu_percent(interval=1)
@@ -1559,7 +1556,7 @@ def admin_broadcast_message(request):
             
             send_mass_mail(email_messages, fail_silently=True)
             emails_sent = len(email_messages)
-        except Exception as e:
+        except Exception:
             # Log email error but don't fail the broadcast
             pass
     

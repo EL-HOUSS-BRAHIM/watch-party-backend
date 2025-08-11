@@ -9,7 +9,6 @@ from datetime import timedelta
 
 from apps.interactive.models import InteractivePoll
 from apps.parties.models import WatchParty
-from apps.authentication.models import User
 
 
 class Command(BaseCommand):

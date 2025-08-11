@@ -2,10 +2,8 @@
 Base settings for Watch Party Backend
 """
 
-import os
 from pathlib import Path
 from decouple import config
-import dj_database_url
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent.parent

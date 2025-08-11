@@ -3,15 +3,12 @@ Enhanced security middleware for Watch Party Backend
 """
 
 import time
-import json
 import logging
 from django.http import JsonResponse
 from django.core.cache import cache
 from django.conf import settings
 from django.utils.deprecation import MiddlewareMixin
 from django.middleware.csrf import CsrfViewMiddleware
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.functional import SimpleLazyObject
 from core.security import SecurityHeaders, get_client_ip, rate_limit_key
 
 logger = logging.getLogger(__name__)

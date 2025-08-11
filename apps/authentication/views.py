@@ -3,14 +3,12 @@ Authentication views for Watch Party Backend
 """
 
 from rest_framework import status, generics
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView as BaseTokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from django.contrib.auth import login
 from django.utils import timezone
 from django.conf import settings
 from datetime import timedelta
@@ -21,7 +19,6 @@ import qrcode
 import io
 import base64
 import requests
-import json
 
 from .models import User, EmailVerification, PasswordReset, TwoFactorAuth, UserSession
 from .serializers import (
@@ -115,7 +112,7 @@ class LogoutView(APIView):
                 'success': True,
                 'message': 'Successfully logged out.'
             }, status=status.HTTP_200_OK)
-        except Exception as e:
+        except Exception:
             return Response({
                 'success': False,
                 'message': 'Error during logout.'

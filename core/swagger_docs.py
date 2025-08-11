@@ -11,8 +11,6 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     OpenApiTypes
 )
-from drf_spectacular.openapi import AutoSchema
-from rest_framework import status
 
 
 # Example decorators for common API patterns
@@ -185,7 +183,6 @@ class ExampleAPIViewDocumentation:
     )
     def list_videos(self, request):
         """List videos endpoint"""
-        pass
 
     @extend_schema(
         operation_id="example_create_party",
@@ -300,7 +297,6 @@ class ExampleAPIViewDocumentation:
     )
     def create_party(self, request):
         """Create party endpoint"""
-        pass
 
 
 # Authentication examples for Swagger

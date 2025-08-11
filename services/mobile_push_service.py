@@ -2,7 +2,6 @@
 Mobile push notification service for Watch Party Backend
 """
 
-import json
 import logging
 from typing import Dict, List, Optional
 from django.conf import settings

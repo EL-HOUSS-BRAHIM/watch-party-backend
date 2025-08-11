@@ -489,7 +489,7 @@ def update_push_token(request):
 @permission_classes([permissions.IsAuthenticated])
 def remove_push_token(request):
     """Remove user's push notification token"""
-    device_type = request.data.get('device_type', 'web')
+    request.data.get('device_type', 'web')
     
     try:
         preferences = NotificationPreferences.objects.get(user=request.user)

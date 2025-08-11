@@ -5,7 +5,6 @@ Party views for Watch Party Backend
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Q, F, Count
-from django.shortcuts import get_object_or_404
 from django.core.cache import cache
 from rest_framework import status, generics, permissions, filters
 from rest_framework.decorators import action

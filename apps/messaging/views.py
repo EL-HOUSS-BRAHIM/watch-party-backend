@@ -2,18 +2,13 @@
 Views for Messaging functionality
 """
 
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404
-from django.db.models import Q, Prefetch, Count
 from django.db import models
 from django.utils import timezone
 
 from core.responses import StandardResponse
-from .models import Conversation, ConversationParticipant, Message, MessageReaction
+from .models import Conversation, Message, MessageReaction
 from apps.authentication.models import User
 
 
