@@ -3,7 +3,6 @@ Database optimization settings and utilities
 """
 
 import os
-from django.conf import settings
 
 # Database connection optimization settings
 DATABASE_OPTIMIZATION_SETTINGS = {
@@ -11,10 +10,6 @@ DATABASE_OPTIMIZATION_SETTINGS = {
         # Connection pooling for PostgreSQL
         'MAX_CONNS': 20,
         'MIN_CONNS': 5,
-        
-        # Query optimization
-        'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        'charset': 'utf8mb4',
         
         # Connection timeout settings
         'connect_timeout': 60,
@@ -61,7 +56,7 @@ QUERY_OPTIMIZATION = {
     'PREFETCH_RELATED_DEPTH': 3,
     'MAX_QUERY_TIME_MS': 1000,
     'SLOW_QUERY_THRESHOLD_MS': 500,
-    'ENABLE_QUERY_LOGGING': settings.DEBUG,
+    'ENABLE_QUERY_LOGGING': os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes'),
     'ENABLE_QUERY_ANALYSIS': True,
 }
 
@@ -204,17 +199,17 @@ QUERY_HINTS = {
 
 # Performance monitoring settings
 PERFORMANCE_MONITORING = {
-    'ENABLE_QUERY_LOGGING': settings.DEBUG,
+    'ENABLE_QUERY_LOGGING': os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes'),
     'SLOW_QUERY_THRESHOLD_MS': 500,
     'LOG_SLOW_QUERIES': True,
-    'ENABLE_PROFILING': settings.DEBUG,
-    'PROFILE_SQL_QUERIES': settings.DEBUG,
-    'ENABLE_MEMORY_TRACKING': settings.DEBUG,
+    'ENABLE_PROFILING': os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes'),
+    'PROFILE_SQL_QUERIES': os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes'),
+    'ENABLE_MEMORY_TRACKING': os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes'),
 }
 
 # Connection pooling configuration for production
 CONNECTION_POOLING = {
-    'ENABLED': not settings.DEBUG,
+    'ENABLED': not (os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')),
     'POOL_SIZE': 20,
     'MAX_OVERFLOW': 30,
     'POOL_TIMEOUT': 30,
@@ -226,6 +221,19 @@ def get_optimized_database_config():
     """
     Get optimized database configuration based on environment
     """
+    import dj_database_url
+    from pathlib import Path
+    
+    # Check for DATABASE_URL first (used in testing/CI)
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        config = {
+            'default': dj_database_url.parse(database_url, conn_max_age=0)
+        }
+        # Don't apply optimization settings in testing
+        return config
+    
+    # Standard configuration for development/production
     config = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -238,11 +246,14 @@ def get_optimized_database_config():
         }
     }
     
-    # Add SQLite config for development/testing
-    if settings.DEBUG or 'test' in os.environ.get('DJANGO_SETTINGS_MODULE', ''):
+    # Add SQLite config for development when DEBUG is true and no DATABASE_URL
+    debug = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
+    if debug and not database_url:
+        # Get BASE_DIR equivalent
+        base_dir = Path(__file__).resolve().parent.parent
         config['default'] = {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': settings.BASE_DIR / 'db.sqlite3',
+            'NAME': base_dir / 'db.sqlite3',
             'OPTIONS': {
                 'timeout': 60,
                 'check_same_thread': False,

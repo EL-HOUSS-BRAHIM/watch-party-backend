@@ -11,33 +11,31 @@ DEBUG = True
 # Database configuration for testing
 # Check if we have a DATABASE_URL from environment (GitHub Actions)
 DATABASE_URL = os.environ.get('DATABASE_URL')
-print(f"DEBUG: DATABASE_URL = {DATABASE_URL}")  # Temporary debug line
 
 if DATABASE_URL:
     # Use the provided database URL (for GitHub Actions)
     import dj_database_url
     DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL)
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=0)
     }
-    print(f"DEBUG: Using PostgreSQL database: {DATABASES['default']}")  # Temporary debug line
     
     # Override connection settings for PostgreSQL in CI
     DATABASES['default'].update({
         'CONN_MAX_AGE': 0,  # Don't persist connections in tests
-        'OPTIONS': {},
+        'CONN_HEALTH_CHECKS': False,
+        'DISABLE_SERVER_SIDE_CURSORS': False,
         'TEST': {
             'NAME': 'test_watchparty',
         },
     })
     
-    # If it's PostgreSQL, add specific options
+    # If it's PostgreSQL, add specific options with proper isolation level
     if 'postgresql' in DATABASE_URL or 'postgres' in DATABASE_URL:
         DATABASES['default']['OPTIONS'] = {
-            'options': '-c default_transaction_isolation=read_committed'
+            'options': '-c default_transaction_isolation="read committed"'
         }
 else:
     # Use in-memory SQLite for local testing
-    print("DEBUG: Using SQLite for local testing")  # Temporary debug line
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
