@@ -32,9 +32,9 @@ if DATABASE_URL:
     # If it's PostgreSQL, add specific options with proper isolation level
     if 'postgresql' in DATABASE_URL or 'postgres' in DATABASE_URL:
         DATABASES['default']['OPTIONS'] = {
-            # Use correct quoting for value with space (CI previously failed with ""read" parsing issue)
-            # Note: default is already 'read committed'; this explicit setting ensures consistency in CI.
-            'options': '-c default_transaction_isolation="read committed"'
+            # Use correct quoting for PostgreSQL options
+            # Fix: Remove quotes around the isolation level value to prevent parsing errors
+            'options': '-c default_transaction_isolation=read_committed'
         }
 else:
     # Use in-memory SQLite for local testing
