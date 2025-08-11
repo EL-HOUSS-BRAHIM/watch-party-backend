@@ -28,14 +28,6 @@ if DATABASE_URL:
             'NAME': 'test_watchparty',
         },
     })
-    
-    # If it's PostgreSQL, add specific options with proper isolation level
-    if 'postgresql' in DATABASE_URL or 'postgres' in DATABASE_URL:
-        DATABASES['default']['OPTIONS'] = {
-            # Use correct quoting for PostgreSQL options
-            # Fix: Use proper PostgreSQL format - space-separated words for isolation level
-            'options': '-c default_transaction_isolation="read committed"'
-        }
 else:
     # Use in-memory SQLite for local testing
     DATABASES = {
