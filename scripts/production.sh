@@ -906,8 +906,33 @@ EOF
     log_success "Systemd services created"
 }
 
+# =============================================================================
+# NGINX CONFIGURATION
+# =============================================================================
+
+configure_nginx_global() {
+    log_info "Configuring global Nginx settings..."
+    
+    # Add rate limiting configuration to nginx.conf if not already present
+    if ! sudo grep -q "limit_req_zone" /etc/nginx/nginx.conf; then
+        log_info "Adding rate limiting zones to nginx.conf..."
+        # Create a temporary file with the new configuration
+        sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+        
+        # Insert rate limiting configuration after the http directive
+        sudo sed -i '/http {/a\\n\t# Rate limiting zones for Watch Party\n\tlimit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;\n\tlimit_req_zone $binary_remote_addr zone=websocket:10m rate=50r/s;\n' /etc/nginx/nginx.conf
+        
+        log_success "Rate limiting zones added to nginx.conf"
+    else
+        log_info "Rate limiting zones already configured in nginx.conf"
+    fi
+}
+
 configure_nginx() {
     log_info "Configuring Nginx..."
+    
+    # Configure global nginx settings first
+    configure_nginx_global
     
     # Ensure Nginx directories exist
     sudo mkdir -p "$NGINX_SITES_AVAILABLE"
@@ -983,8 +1008,7 @@ server {
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
         
-        # Rate limiting
-        limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/s;
+        # Rate limiting (zone must be defined in nginx.conf first)
         limit_req zone=api burst=20 nodelay;
     }
 
@@ -1349,6 +1373,7 @@ show_help() {
     echo "  validate-env           Validate environment configuration"
     echo "  fix-permissions        Fix file permissions"
     echo "  config-nginx           Reconfigure Nginx"
+    echo "  fix-nginx              Fix Nginx configuration issues"
     echo
     echo "OPTIONS:"
     echo "  --force                Force operations without confirmation"
@@ -1419,6 +1444,11 @@ main() {
             log_success "Permissions fixed"
             ;;
         config-nginx)
+            configure_nginx
+            sudo systemctl reload nginx
+            ;;
+        fix-nginx|config-nginx)
+            configure_nginx_global
             configure_nginx
             sudo systemctl reload nginx
             ;;

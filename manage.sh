@@ -185,6 +185,8 @@ show_help() {
     echo -e "  ${CYAN}fix-ports${NC}              Resolve port conflicts"
     echo -e "  ${CYAN}validate-dirs${NC}          Validate and fix directory structure"
     echo -e "  ${CYAN}fix-dirs${NC}               Fix directory structure issues"
+    echo -e "  ${CYAN}fix-nginx${NC}              Fix Nginx configuration issues"
+    echo -e "  ${CYAN}config-nginx${NC}           Reconfigure Nginx"
     echo -e "  ${CYAN}validate-env${NC}           Validate environment configuration"
     echo -e "  ${CYAN}fix-env${NC}                Fix environment issues"
     echo -e "  ${CYAN}setup-env${NC}              Interactive environment setup"
@@ -400,8 +402,12 @@ cmd_validate_dirs() {
     execute_script "$SCRIPTS_DIR/production.sh" "validate-dirs" "$@"
 }
 
-cmd_fix_dirs() {
-    execute_script "$SCRIPTS_DIR/production.sh" "fix-dirs" "$@"
+cmd_fix_nginx() {
+    execute_script "$SCRIPTS_DIR/production.sh" "fix-nginx" "$@"
+}
+
+cmd_config_nginx() {
+    execute_script "$SCRIPTS_DIR/production.sh" "config-nginx" "$@"
 }
 
 # Environment validation commands
@@ -576,6 +582,8 @@ main() {
         fix-ports)              cmd_fix_ports "$@" ;;
         validate-dirs)          cmd_validate_dirs "$@" ;;
         fix-dirs)               cmd_fix_dirs "$@" ;;
+        fix-nginx)              cmd_fix_nginx "$@" ;;
+        config-nginx)           cmd_config_nginx "$@" ;;
         production)             cmd_prod "$@" ;;
         
         # Environment validation
