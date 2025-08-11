@@ -31,16 +31,16 @@ if DATABASE_URL:
         },
     })
 else:
-    # Use in-memory SQLite for local testing
+    # Use file-based SQLite for local testing
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': ':memory:',
+            'NAME': '/tmp/test_db.sqlite3',
             'OPTIONS': {
                 'timeout': 20,
             },
             'TEST': {
-                'NAME': ':memory:',
+                'NAME': '/tmp/test_db.sqlite3',
             },
         }
     }
@@ -104,15 +104,30 @@ if REDIS_URL:
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             }
+        },
+        'sessions': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
         }
     }
+    # Session configuration for testing
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'sessions'
 else:
     # Use dummy cache for local tests
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        },
+        'sessions': {
+            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
         }
     }
+    # Use database sessions for local testing when no Redis
+    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
 # Disable Celery for tests
 CELERY_TASK_ALWAYS_EAGER = True

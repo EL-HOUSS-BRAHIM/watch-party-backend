@@ -34,18 +34,20 @@ class BaseTestCase(TestCase):
         """Set up test data"""
         self.user = self.create_test_user()
         self.admin_user = self.create_test_user(
-            username='admin',
             email='admin@test.com',
+            first_name='Admin',
+            last_name='User',
             is_staff=True,
             is_superuser=True
         )
     
-    def create_test_user(self, username='testuser', email='test@test.com', 
-                        password='testpass123', **kwargs):
+    def create_test_user(self, email='test@test.com', first_name='Test', 
+                        last_name='User', password='testpass123', **kwargs):
         """Create a test user with default or custom attributes"""
         return User.objects.create_user(
-            username=username,
             email=email,
+            first_name=first_name,
+            last_name=last_name,
             password=password,
             **kwargs
         )
@@ -253,8 +255,9 @@ class WebSocketTestCase(TransactionTestCase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(
-            username='testuser',
             email='test@test.com',
+            first_name='Test',
+            last_name='User',
             password='testpass123'
         )
     
@@ -399,16 +402,21 @@ class MockExternalServices:
     
     @staticmethod
     def mock_stripe():
-        """Mock Stripe service"""
-        with patch('stripe.Customer.create') as mock_create, \
-             patch('stripe.Subscription.create') as mock_sub_create:
-            
-            mock_create.return_value = MagicMock(id='cus_test123')
-            mock_sub_create.return_value = MagicMock(
-                id='sub_test123',
-                status='active'
-            )
-            yield mock_create, mock_sub_create
+        """Mock Stripe service - returns a decorator"""
+        def decorator(func):
+            def wrapper(*args, **kwargs):
+                with patch('stripe.Customer.create') as mock_create, \
+                     patch('stripe.Subscription.create') as mock_sub_create:
+                    
+                    mock_create.return_value = MagicMock(id='cus_test123')
+                    mock_sub_create.return_value = MagicMock(
+                        id='sub_test123',
+                        status='active'
+                    )
+                    # Pass mocks as the last argument
+                    return func(*args, (mock_create, mock_sub_create), **kwargs)
+            return wrapper
+        return decorator
     
     @staticmethod
     def mock_aws_s3():

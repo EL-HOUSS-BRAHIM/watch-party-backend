@@ -459,8 +459,9 @@ class ComplianceTests(TestCase):
     def test_password_storage_security(self):
         """Test that passwords are properly hashed"""
         user = User.objects.create_user(
-            username='testuser',
             email='test@test.com',
+            first_name='Test',
+            last_name='User',
             password='testpassword123'
         )
         

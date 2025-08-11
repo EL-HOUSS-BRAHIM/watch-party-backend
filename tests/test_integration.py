@@ -25,7 +25,6 @@ def create_test_data():
     test_user, created = User.objects.get_or_create(
         email='demo@example.com',
         defaults={
-            'username': 'demo@example.com',
             'first_name': 'Demo',
             'last_name': 'User',
             'password': make_password('demo123'),

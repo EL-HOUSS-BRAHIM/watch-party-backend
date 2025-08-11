@@ -156,8 +156,9 @@ class DatabasePerformanceTests(TransactionTestCase):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         return User.objects.create_user(
-            username='testuser',
             email='test@test.com',
+            first_name='Test',
+            last_name='User',
             password='testpass123'
         )
     
@@ -490,8 +491,9 @@ class IntegrationTests(BaseAPITestCase):
         """Test social features integration"""
         # Create second user
         second_user = self.create_test_user(
-            username='socialuser',
-            email='social@test.com'
+            email='social@test.com',
+            first_name='Social',
+            last_name='User'
         )
         second_client = self.auth_client.__class__()
         second_token = self.authenticate_user(second_user)
