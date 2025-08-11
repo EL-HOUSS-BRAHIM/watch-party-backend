@@ -913,11 +913,15 @@ configure_nginx() {
     sudo mkdir -p "$NGINX_SITES_AVAILABLE"
     sudo mkdir -p "$NGINX_SITES_ENABLED"
     
-    # Remove default site if it exists
+    # Remove default site and any existing watch-party configs
     sudo rm -f "$NGINX_SITES_ENABLED/default"
+    sudo rm -f "$NGINX_SITES_ENABLED/watch-party"
+    sudo rm -f "$NGINX_SITES_AVAILABLE/watch-party"
+    sudo rm -f "$NGINX_SITES_ENABLED/watchparty"
+    sudo rm -f "$NGINX_SITES_AVAILABLE/watchparty"
     
-    # Create Watch Party site configuration
-    sudo tee "$NGINX_SITES_AVAILABLE/watchparty" > /dev/null << EOF
+    # Create Watch Party site configuration (using watch-party to match existing nginx.conf)
+    sudo tee "$NGINX_SITES_AVAILABLE/watch-party" > /dev/null << EOF
 # Watch Party Backend Nginx Configuration
 server {
     listen $DEFAULT_NGINX_HTTP;
@@ -1009,9 +1013,9 @@ server {
 }
 EOF
 
-    # Ensure the sites-enabled directory exists and enable site
+    # Ensure the sites-enabled directory exists and enable site (using watch-party filename)
     sudo mkdir -p "$NGINX_SITES_ENABLED"
-    sudo ln -sf "$NGINX_SITES_AVAILABLE/watchparty" "$NGINX_SITES_ENABLED/"
+    sudo ln -sf "$NGINX_SITES_AVAILABLE/watch-party" "$NGINX_SITES_ENABLED/"
     
     # Test configuration
     if ! sudo nginx -t; then
