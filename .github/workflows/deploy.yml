@@ -88,10 +88,30 @@ jobs:
         PGPASSWORD=postgres createdb -h localhost -U postgres test_watchparty || echo "Database already exists"
 
     - name: Run migrations
+      env:
+        DJANGO_SETTINGS_MODULE: watchparty.settings.testing
+        SECRET_KEY: test-secret-key-for-github-actions
+        DEBUG: true
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_watchparty
+        REDIS_URL: redis://localhost:6379/0
+        USE_MIGRATIONS: true
+        ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+        CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+        EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
       run: |
         python manage.py migrate --settings=watchparty.settings.testing
 
     - name: Run tests with coverage
+      env:
+        DJANGO_SETTINGS_MODULE: watchparty.settings.testing
+        SECRET_KEY: test-secret-key-for-github-actions
+        DEBUG: true
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_watchparty
+        REDIS_URL: redis://localhost:6379/0
+        USE_MIGRATIONS: true
+        ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+        CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+        EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
       run: |
         coverage run --source='.' manage.py test --settings=watchparty.settings.testing
         coverage xml
