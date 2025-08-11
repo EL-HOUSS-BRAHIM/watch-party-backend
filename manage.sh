@@ -158,6 +158,14 @@ show_help() {
     echo -e "  ${BLUE}clean${NC}                  Clean project files"
     echo -e "  ${BLUE}reset${NC}                  Reset database and start fresh"
     echo
+    echo -e "${WHITE}ENVIRONMENT CONFIGURATION:${NC}"
+    echo -e "  ${CYAN}setup-env${NC}              Interactive development environment setup"
+    echo -e "  ${CYAN}setup-env-prod${NC}         Interactive production environment setup"
+    echo -e "  ${CYAN}quick-env${NC}              Quick development environment setup"
+    echo -e "  ${CYAN}quick-env-prod${NC}         Quick production environment setup"
+    echo -e "  ${CYAN}validate-env${NC}           Validate .env file"
+    echo -e "  ${CYAN}env-status${NC}             Show environment status"
+    echo
     echo -e "${WHITE}DEPLOYMENT & SERVER:${NC}"
     echo -e "  ${MAGENTA}deploy${NC}                 Deploy to production server"
     echo -e "  ${MAGENTA}deploy-staging${NC}        Deploy to staging server"
@@ -205,6 +213,10 @@ show_help() {
     echo
     echo -e "${WHITE}EXAMPLES:${NC}"
     echo "  ./manage.sh dev                     # Start development server"
+    echo "  ./manage.sh quick-env               # Quick environment setup with defaults"
+    echo "  ./manage.sh setup-env               # Interactive environment setup"
+    echo "  ./manage.sh validate-env            # Validate .env file"
+    echo "  ./manage.sh env-status              # Show environment status"
     echo "  ./manage.sh prod-setup              # Setup production server"
     echo "  ./manage.sh prod-status             # Check production status"
     echo "  ./manage.sh check-ports             # Check for port conflicts"
@@ -296,6 +308,31 @@ cmd_clean() {
 
 cmd_reset() {
     execute_script "$SCRIPTS_DIR/development.sh" "reset" "$@"
+}
+
+# Environment configuration commands
+cmd_setup_env() {
+    execute_script "$SCRIPTS_DIR/env-setup.sh" "interactive-dev" "$@"
+}
+
+cmd_setup_env_prod() {
+    execute_script "$SCRIPTS_DIR/env-setup.sh" "interactive-prod" "$@"
+}
+
+cmd_quick_env() {
+    execute_script "$SCRIPTS_DIR/env-setup.sh" "quick-dev" "$@"
+}
+
+cmd_quick_env_prod() {
+    execute_script "$SCRIPTS_DIR/env-setup.sh" "quick-prod" "$@"
+}
+
+cmd_validate_env() {
+    execute_script "$SCRIPTS_DIR/env-setup.sh" "validate" "$@"
+}
+
+cmd_env_status() {
+    execute_script "$SCRIPTS_DIR/env-setup.sh" "status" "$@"
 }
 
 # Deployment commands
@@ -502,6 +539,15 @@ main() {
         logs|log)               cmd_logs "$@" ;;
         clean|cleanup)          cmd_clean "$@" ;;
         reset|restart)          cmd_reset "$@" ;;
+        
+        # Environment configuration
+        setup-env)              cmd_setup_env "$@" ;;
+        setup-env-prod)         cmd_setup_env_prod "$@" ;;
+        quick-env)              cmd_quick_env "$@" ;;
+        quick-env-prod)         cmd_quick_env_prod "$@" ;;
+        validate-env)           cmd_validate_env "$@" ;;
+        env-status)             cmd_env_status "$@" ;;
+        env)                    cmd_env_status "$@" ;;
         
         # Deployment
         deploy)                 cmd_deploy "$@" ;;
