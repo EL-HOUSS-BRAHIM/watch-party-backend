@@ -1,0 +1,348 @@
+name: Deploy Watch Party Backend
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment even if tests fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '18'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_watchparty
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        ports:
+        - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+        ports:
+        - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install coverage pytest-django
+
+    - name: Create test environment file
+      run: |
+        cat > .env << EOF
+        DJANGO_SETTINGS_MODULE=watchparty.settings.testing
+        SECRET_KEY=test-secret-key-for-github-actions
+        DEBUG=True
+        DATABASE_URL=postgres://postgres:postgres@localhost:5432/test_watchparty
+        REDIS_URL=redis://localhost:6379/0
+        ALLOWED_HOSTS=localhost,127.0.0.1,testserver
+        CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+        EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+        EOF
+
+    - name: Run migrations
+      run: |
+        python manage.py migrate --settings=watchparty.settings.testing
+
+    - name: Run tests with coverage
+      run: |
+        coverage run --source='.' manage.py test --settings=watchparty.settings.testing
+        coverage xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+
+    - name: Run security checks
+      run: |
+        pip install bandit safety
+        bandit -r . -x '/venv/,*/migrations/*,*/tests/*' -f json -o bandit-report.json || true
+        safety check --json --output safety-report.json || true
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-reports
+        path: |
+          coverage.xml
+          bandit-report.json
+          safety-report.json
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event.inputs.force_deploy == 'true'
+
+    outputs:
+      deployment_ready: ${{ steps.check_deployment.outputs.ready }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check deployment readiness
+      id: check_deployment
+      run: |
+        if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ]]; then
+          echo "ready=true" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event.inputs.force_deploy }}" == "true" ]]; then
+          echo "ready=true" >> $GITHUB_OUTPUT
+        else
+          echo "ready=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create deployment package
+      if: steps.check_deployment.outputs.ready == 'true'
+      run: |
+        # Create a clean deployment package
+        mkdir -p deployment-package
+
+        # Copy application files (excluding development files)
+        rsync -av --exclude='.git' \
+                  --exclude='*.pyc' \
+                  --exclude='__pycache__' \
+                  --exclude='.pytest_cache' \
+                  --exclude='node_modules' \
+                  --exclude='.env' \
+                  --exclude='db.sqlite3' \
+                  --exclude='logs' \
+                  --exclude='.coverage' \
+                  --exclude='htmlcov' \
+                  --exclude='*.log' \
+                  --exclude='.vscode' \
+                  --exclude='.idea' \
+                  ./ deployment-package/
+
+        # Create deployment info file
+        cat > deployment-package/deployment-info.json << EOF
+        {
+          "commit_sha": "${{ github.sha }}",
+          "commit_message": "$(git log -1 --pretty=%B | head -1)",
+          "branch": "${{ github.ref_name }}",
+          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "actor": "${{ github.actor }}",
+          "run_id": "${{ github.run_id }}"
+        }
+        EOF
+
+    - name: Upload deployment package
+      if: steps.check_deployment.outputs.ready == 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-package
+        path: deployment-package/
+        retention-days: 30
+
+  deploy:
+    needs: [ test, build ]
+    runs-on: ubuntu-latest
+    if: needs.build.outputs.deployment_ready == 'true'
+    environment: production
+
+    steps:
+    - name: Download deployment package
+      uses: actions/download-artifact@v3
+      with:
+        name: deployment-package
+        path: deployment-package/
+
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Deploy to server
+      run: |
+        # Create deployment script
+        cat > deploy_to_server.sh << 'DEPLOY_SCRIPT'
+        #!/bin/bash
+        set -e
+
+        # Configuration from environment variables
+        SERVER_HOST="${{ secrets.SERVER_HOST }}"
+        SERVER_USER="${{ secrets.SERVER_USER }}"
+        PROJECT_DIR="${{ secrets.PROJECT_DIR || '/var/www/watch-party-backend' }}"
+        DOMAIN="${{ secrets.DOMAIN }}"
+
+        # Colors for output
+        GREEN='\033[0;32m'
+        YELLOW='\033[1;33m'
+        NC='\033[0m'
+
+        log() {
+            echo -e "${GREEN}[DEPLOY] $1${NC}"
+        }
+
+        warn() {
+            echo -e "${YELLOW}[DEPLOY] $1${NC}"
+        }
+
+        log "Starting deployment to $SERVER_HOST"
+
+        # Check if this is first-time deployment
+        FIRST_DEPLOYMENT=false
+        if ssh $SERVER_USER@$SERVER_HOST "[ ! -d '$PROJECT_DIR' ]"; then
+            FIRST_DEPLOYMENT=true
+            log "First-time deployment detected"
+        fi
+
+        # Create backup of current deployment (if exists)
+        if [ "$FIRST_DEPLOYMENT" = false ]; then
+            log "Creating backup of current deployment"
+            ssh $SERVER_USER@$SERVER_HOST "
+                sudo mkdir -p /var/backups/watchparty/deployments
+                sudo tar -czf /var/backups/watchparty/deployments/pre-deploy-\$(date +%Y%m%d_%H%M%S).tar.gz -C $PROJECT_DIR . 2>/dev/null || true
+            "
+        fi
+
+        # Upload deployment package
+        log "Uploading deployment package"
+        scp -r deployment-package/* $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
+
+        # Execute deployment on server
+        ssh $SERVER_USER@$SERVER_HOST << 'REMOTE_SCRIPT'
+            set -e
+            
+            # Move to deployment directory
+            cd /tmp/watchparty-deploy
+            
+            # Check if initial deployment is needed
+            if [ ! -d "${{ secrets.PROJECT_DIR || '/var/www/watch-party-backend' }}" ]; then
+                echo "Running initial deployment setup..."
+                
+                # Make deploy script executable and run it
+                chmod +x deploy.sh
+                sudo DOMAIN="${{ secrets.DOMAIN }}" ./deploy.sh
+                
+            else
+                echo "Updating existing deployment..."
+                
+                PROJECT_DIR="${{ secrets.PROJECT_DIR || '/var/www/watch-party-backend' }}"
+                PROJECT_USER="${{ secrets.PROJECT_USER || 'watchparty' }}"
+                
+                # Stop services
+                sudo supervisorctl stop all
+                
+                # Backup current virtual environment
+                sudo -u $PROJECT_USER cp -r $PROJECT_DIR/venv $PROJECT_DIR/venv.backup
+                
+                # Update application code
+                sudo rsync -av --exclude='venv*' --exclude='.env' --exclude='logs' --exclude='static' --exclude='media' \
+                    ./ $PROJECT_DIR/
+                
+                # Update Python dependencies
+                sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/pip install -r $PROJECT_DIR/requirements.txt
+                
+                # Run Django management commands
+                cd $PROJECT_DIR
+                sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/python manage.py migrate --settings=watchparty.settings.production
+                sudo -u $PROJECT_USER $PROJECT_DIR/venv/bin/python manage.py collectstatic --noinput --settings=watchparty.settings.production
+                
+                # Update supervisor configuration
+                sudo supervisorctl reread
+                sudo supervisorctl update
+                
+                # Start services
+                sudo supervisorctl start all
+                
+                # Test deployment
+                sleep 10
+                if curl -f http://localhost:8000/health/ > /dev/null 2>&1; then
+                    echo "Deployment successful - health check passed"
+                    # Remove backup
+                    sudo rm -rf $PROJECT_DIR/venv.backup
+                else
+                    echo "Deployment failed - rolling back"
+                    sudo supervisorctl stop all
+                    sudo -u $PROJECT_USER rm -rf $PROJECT_DIR/venv
+                    sudo -u $PROJECT_USER mv $PROJECT_DIR/venv.backup $PROJECT_DIR/venv
+                    sudo supervisorctl start all
+                    exit 1
+                fi
+            fi
+            
+            # Cleanup
+            rm -rf /tmp/watchparty-deploy
+        REMOTE_SCRIPT
+
+        log "Deployment completed successfully"
+
+        # Post-deployment verification
+        log "Running post-deployment verification"
+        if [ -n "$DOMAIN" ]; then
+            sleep 30  # Wait for services to fully start
+            if curl -f "https://$DOMAIN/health/" > /dev/null 2>&1; then
+                log "Health check passed for https://$DOMAIN"
+            else
+                warn "Health check failed for https://$DOMAIN - check server logs"
+            fi
+        fi
+
+        DEPLOY_SCRIPT
+
+        chmod +x deploy_to_server.sh
+        ./deploy_to_server.sh
+
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deployment completed successfully"
+          echo "🚀 Application is now live at https://${{ secrets.DOMAIN }}"
+        else
+          echo "❌ Deployment failed"
+          echo "Check the deployment logs for more information"
+        fi
+
+  cleanup:
+    needs: [ deploy ]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Cleanup artifacts
+      run: |
+        echo "Deployment workflow completed"
+        echo "Commit: ${{ github.sha }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Actor: ${{ github.actor }}"
