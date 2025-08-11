@@ -65,24 +65,44 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    
+    # Enhanced security middleware (early in the stack)
+    'middleware.security_middleware.EnhancedSecurityMiddleware',
+    'middleware.security_middleware.AdvancedRateLimitMiddleware',
+    'middleware.security_middleware.FileUploadSecurityMiddleware',
+    'middleware.security_middleware.APIVersioningMiddleware',
+    
+    # Performance and optimization middleware
+    'middleware.performance_middleware.RateLimitMiddleware',
+    'middleware.performance_middleware.ResponseCompressionMiddleware',
+    'middleware.database_optimization.QueryOptimizationMiddleware',
+    'middleware.database_optimization.DatabaseConnectionMiddleware',
+    'middleware.database_optimization.CacheOptimizationMiddleware',
+    
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'middleware.security_middleware.CSRFProtectionMiddleware',  # Enhanced CSRF protection
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
+    # Enhanced custom middleware
     'middleware.enhanced_middleware.RequestLoggingMiddleware',
-    'middleware.enhanced_middleware.EnhancedRateLimitMiddleware',
     'middleware.enhanced_middleware.SecurityHeadersMiddleware',
     'middleware.enhanced_middleware.UserActivityMiddleware',
-    'middleware.enhanced_middleware.PerformanceMiddleware',
     'middleware.enhanced_middleware.ErrorHandlingMiddleware',
     'middleware.enhanced_middleware.MaintenanceMiddleware',
     'middleware.enhanced_middleware.APIVersionMiddleware',
     'middleware.enhanced_middleware.ContentTypeMiddleware',
+    
+    # Security audit middleware (later in stack)
+    'middleware.security_middleware.SecurityAuditMiddleware',
+    
+    # Performance monitoring
     'middleware.performance_middleware.APIPerformanceMiddleware',
-    'middleware.performance_middleware.APIRateLimitingMiddleware',
+    'middleware.database_optimization.QueryCountLimitMiddleware',
+    'middleware.database_optimization.DatabaseIndexHintMiddleware',
 ]
 
 ROOT_URLCONF = 'watchparty.urls'
@@ -106,15 +126,22 @@ TEMPLATES = [
 WSGI_APPLICATION = 'watchparty.wsgi.application'
 ASGI_APPLICATION = 'watchparty.asgi.application'
 
-# Database
-# Default to SQLite for development, but support multiple configurations
-DATABASES = {
-    'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR}/db.sqlite3",
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
-}
+# Database with optimizations
+from core.database_optimization import get_optimized_database_config, get_cache_config
+
+# Use optimized database configuration
+DATABASES = get_optimized_database_config()
+
+# Enhanced cache configuration with Redis
+CACHES = get_cache_config()
+
+# Query optimization settings
+ENABLE_QUERY_LOGGING = DEBUG
+SLOW_QUERY_THRESHOLD_MS = 500
+MAX_QUERIES_PER_REQUEST = 50
+USE_CACHE = True
+ENABLE_RATE_LIMITING = True
+ENABLE_PERFORMANCE_MONITORING = True
 
 # Custom User Model
 AUTH_USER_MODEL = 'authentication.User'
@@ -179,7 +206,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_SCHEMA_CLASS': 'core.api_documentation.EnhancedAutoSchema',
     'EXCEPTION_HANDLER': 'core.error_handling.enhanced_exception_handler',
 }
 
@@ -221,28 +248,41 @@ CORS_ALLOWED_ORIGINS = config(
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only for development
 
-# Cache Configuration
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/0'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
-    }
-}
-
+# Cache Configuration (now using optimized configuration from above)
 # Session Configuration
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'default'
+SESSION_CACHE_ALIAS = 'sessions'
+SESSION_COOKIE_AGE = 1800  # 30 minutes
 
-# Celery Configuration
+# Cache key prefixes
+CACHE_KEY_PREFIX = 'watchparty'
+
+# Cache versioning
+CACHE_VERSION = 1
+
+# Celery Configuration for Background Tasks
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/2')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://127.0.0.1:6379/3')
 CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    'daily-analytics-processing': {
+        'task': 'core.background_tasks.schedule_daily_tasks',
+        'schedule': 3600.0,  # Every hour
+    },
+    'cleanup-expired-data': {
+        'task': 'core.background_tasks.cleanup_expired_data',
+        'schedule': 86400.0,  # Daily
+    },
+}
+CELERY_TASK_ROUTES = {
+    'core.background_tasks.process_search_analytics': {'queue': 'analytics'},
+    'core.background_tasks.process_notification_analytics': {'queue': 'analytics'},
+    'core.background_tasks.cleanup_expired_data': {'queue': 'maintenance'},
+    'core.background_tasks.optimize_database_indexes': {'queue': 'maintenance'},
+}
 
 # Channels Configuration
 CHANNEL_LAYERS = {
@@ -411,6 +451,14 @@ LOGGING = {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
+        'security': {
+            'format': '[SECURITY] {levelname} {asctime} {message}',
+            'style': '{',
+        },
+        'performance': {
+            'format': '[PERFORMANCE] {levelname} {asctime} {message}',
+            'style': '{',
+        },
     },
     'handlers': {
         'file': {
@@ -423,6 +471,18 @@ LOGGING = {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
+        },
+        'security_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'security.log',
+            'formatter': 'security',
+        },
+        'performance_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'performance.log',
+            'formatter': 'performance',
         },
     },
     'root': {
@@ -440,6 +500,16 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'security_audit': {
+            'handlers': ['security_file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'performance': {
+            'handlers': ['performance_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
 
@@ -450,6 +520,54 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=0, cast=int)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=False, cast=bool)
 SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=False, cast=bool)
+
+# Enhanced Security Settings
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if config('USE_HTTPS', default=False, cast=bool) else None
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Strict'
+CSRF_COOKIE_SAMESITE = 'Strict'
+
+# File Upload Security
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
+MAX_REQUEST_SIZE = 500 * 1024 * 1024  # 500MB for video uploads
+
+# Input Validation Settings
+MAX_USERNAME_LENGTH = 50
+MAX_EMAIL_LENGTH = 254
+MAX_TEXT_LENGTH = 5000
+MAX_FILENAME_LENGTH = 255
+
+# Rate Limiting Settings
+ENABLE_RATE_LIMITING = config('ENABLE_RATE_LIMITING', default=True, cast=bool)
+RATE_LIMIT_LOGIN_ATTEMPTS = 5
+RATE_LIMIT_LOGIN_WINDOW = 300  # 5 minutes
+RATE_LIMIT_API_REQUESTS = 1000
+RATE_LIMIT_API_WINDOW = 3600  # 1 hour
+
+# API Security Settings
+API_REQUIRE_AUTHENTICATION = True
+API_ALLOW_ANONYMOUS_READ = config('API_ALLOW_ANONYMOUS_READ', default=False, cast=bool)
+API_VERSION_HEADER = 'HTTP_API_VERSION'
+API_DEFAULT_VERSION = 'v2'
+API_SUPPORTED_VERSIONS = ['v1', 'v2']
+
+# Content Security Policy
+CSP_DEFAULT_SRC = "'self'"
+CSP_SCRIPT_SRC = "'self' 'unsafe-inline' 'unsafe-eval'"
+CSP_STYLE_SRC = "'self' 'unsafe-inline'"
+CSP_IMG_SRC = "'self' data: https:"
+CSP_FONT_SRC = "'self'"
+CSP_CONNECT_SRC = "'self' wss: https:"
+CSP_MEDIA_SRC = "'self' https:"
+CSP_OBJECT_SRC = "'none'"
+CSP_BASE_URI = "'self'"
+CSP_FORM_ACTION = "'self'"
 
 # Video Processing Configuration
 VIDEO_UPLOAD_PATH = 'videos/'

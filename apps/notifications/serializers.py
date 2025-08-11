@@ -6,7 +6,8 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
     Notification, NotificationPreferences, NotificationTemplate, 
-    NotificationDelivery, NotificationQueue
+    NotificationDelivery, NotificationChannel, PushSubscription,
+    NotificationBatch, NotificationAnalytics
 )
 
 User = get_user_model()
@@ -147,15 +148,15 @@ class NotificationDeliverySerializer(serializers.ModelSerializer):
         ]
 
 
-class NotificationQueueSerializer(serializers.ModelSerializer):
-    """Notification queue serializer"""
+class NotificationBatchSerializer(serializers.ModelSerializer):
+    """Notification batch serializer"""
     
     progress_percentage = serializers.ReadOnlyField()
     success_rate = serializers.ReadOnlyField()
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
     
     class Meta:
-        model = NotificationQueue
+        model = NotificationBatch
         fields = [
             'id', 'name', 'description', 'status', 'total_notifications',
             'processed_count', 'failed_count', 'scheduled_at', 'priority',

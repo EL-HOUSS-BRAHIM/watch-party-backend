@@ -1,0 +1,64 @@
+{
+  "timestamp": "2025-08-11T00:28:52.502351",
+  "checks": {
+    "secret_key": {
+      "length": false,
+      "complexity": false,
+      "not_default": true,
+      "not_common": true,
+      "entropy": false
+    },
+    "ssl": {
+      "secure_ssl_redirect": false,
+      "secure_hsts_seconds": false,
+      "session_cookie_secure": false,
+      "csrf_cookie_secure": false
+    },
+    "database": {
+      "ssl_required": false,
+      "connection_pooling": false,
+      "not_sqlite_in_production": true
+    },
+    "cors": {
+      "not_allow_all_origins": true,
+      "specific_domains": true,
+      "no_localhost_in_production": true
+    },
+    "file_uploads": {
+      "reasonable_max_size": true,
+      "video_formats_limited": true,
+      "image_formats_limited": true,
+      "no_executable_formats": true
+    },
+    "logging": {
+      "log_level_appropriate": false,
+      "security_audit_enabled": false,
+      "log_rotation_configured": true
+    },
+    "dependencies": {
+      "vulnerabilities_found": true,
+      "count": "unknown"
+    }
+  },
+  "recommendations": [
+    "Generate a longer SECRET_KEY (min 50 characters)",
+    "Enable HSTS with SECURE_HSTS_SECONDS=31536000",
+    "Enable SSL for database connections",
+    "Update vulnerable dependencies",
+    "Regularly rotate API keys and secrets",
+    "Enable rate limiting on all API endpoints",
+    "Implement proper input validation and sanitization",
+    "Use HTTPS for all external communication",
+    "Monitor security logs and set up alerts",
+    "Conduct regular security audits",
+    "Keep Django and dependencies updated",
+    "Use environment variables for sensitive data"
+  ],
+  "critical_issues": [
+    "Weak SECRET_KEY detected. Generate a new secure key.",
+    "Found unknown dependency vulnerabilities"
+  ],
+  "warnings": [
+    "SSL redirect not enabled - users may connect over HTTP"
+  ]
+}
