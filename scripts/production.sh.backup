@@ -988,7 +988,6 @@ configure_nginx_global() {
     fi
 }
 
-
 configure_nginx() {
     log_info "Configuring Nginx..."
     
@@ -1017,18 +1016,19 @@ configure_nginx() {
     sudo rm -f "$NGINX_SITES_ENABLED/watchparty"
     sudo rm -f "$NGINX_SITES_AVAILABLE/watchparty"
     
-    # Create Watch Party site configuration
+    # Create Watch Party site configuration with conditional rate limiting
     log_info "Creating Watch Party site configuration..."
     
-    sudo tee "$NGINX_SITES_AVAILABLE/watch-party" > /dev/null << 'NGINX_EOF'
+    # Create the configuration file
+    sudo tee "$NGINX_SITES_AVAILABLE/watch-party" > /dev/null << NGINX_EOF
 # Watch Party Backend Nginx Configuration
 server {
-    listen 80;
+    listen $DEFAULT_NGINX_HTTP;
     server_name _;
 
     # Logging
-    access_log /var/log/watchparty/nginx_access.log;
-    error_log /var/log/watchparty/nginx_error.log;
+    access_log $LOG_DIR/nginx_access.log;
+    error_log $LOG_DIR/nginx_error.log;
 
     client_max_body_size 100M;
     client_body_timeout 300s;
@@ -1042,7 +1042,7 @@ server {
 
     # Static files
     location /static/ {
-        alias /var/www/watchparty/static/;
+        alias $PRODUCTION_DIR/static/;
         expires 30d;
         add_header Cache-Control "public, immutable";
         add_header Vary Accept-Encoding;
@@ -1051,21 +1051,21 @@ server {
 
     # Media files
     location /media/ {
-        alias /var/www/watchparty/media/;
+        alias $PRODUCTION_DIR/media/;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
 
     # WebSocket connections
     location /ws/ {
-        proxy_pass http://127.0.0.1:8001;
+        proxy_pass http://127.0.0.1:$DEFAULT_WEBSOCKET_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_connect_timeout 300s;
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
@@ -1073,11 +1073,11 @@ server {
 
     # API and application
     location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:$DEFAULT_HTTP_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_connect_timeout 300s;
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
@@ -1085,11 +1085,11 @@ server {
 
     # Health check endpoint (no rate limiting)
     location /health/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:$DEFAULT_HTTP_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         access_log off;
     }
 
@@ -1115,13 +1115,105 @@ NGINX_EOF
         # Add rate limiting to the API location
         sudo sed -i "/location \/ {/a\\        # Apply API rate limiting\\n        limit_req zone=$api_zone burst=20 nodelay;\\n" "$NGINX_SITES_AVAILABLE/watch-party"
         
-        # Add rate limiting to the WebSocket location  
+        # Add rate limiting to the WebSocket location
         sudo sed -i "/location \/ws\/ {/a\\        # Apply WebSocket rate limiting\\n        limit_req zone=$ws_zone burst=50 nodelay;\\n" "$NGINX_SITES_AVAILABLE/watch-party"
         
         log_success "Rate limiting added to configuration"
     fi
 
     # Ensure the sites-enabled directory exists and enable site
+    sudo mkdir -p "$NGINX_SITES_ENABLED"
+    sudo ln -sf "$NGINX_SITES_AVAILABLE/watch-party" "$NGINX_SITES_ENABLED/"
+    
+    log_info "Testing Nginx configuration..."
+    listen $DEFAULT_NGINX_HTTP;
+    server_name _;
+
+    # Logging
+    access_log $LOG_DIR/nginx_access.log;
+    error_log $LOG_DIR/nginx_error.log;
+
+    client_max_body_size 100M;
+    client_body_timeout 300s;
+    client_header_timeout 300s;
+    
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+
+    # Static files
+    location /static/ {
+        alias $PRODUCTION_DIR/static/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        add_header Vary Accept-Encoding;
+        gzip_static on;
+    }
+
+    # Media files
+    location /media/ {
+        alias $PRODUCTION_DIR/media/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # WebSocket connections
+    location /ws/ {
+        proxy_pass http://127.0.0.1:$DEFAULT_WEBSOCKET_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # API and application
+    location / {
+        proxy_pass http://127.0.0.1:$DEFAULT_HTTP_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        
+        # Rate limiting (zone must be defined in nginx.conf first)
+        limit_req zone=api burst=20 nodelay;
+    }
+
+    # Health check endpoint (no rate limiting)
+    location /health/ {
+        proxy_pass http://127.0.0.1:$DEFAULT_HTTP_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        access_log off;
+    }
+
+    # Deny access to sensitive files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+    
+    location ~ /(\.env|requirements\.txt|manage\.py)$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+}
+
+    # Add rate limiting to the configuration if zones are available
     sudo mkdir -p "$NGINX_SITES_ENABLED"
     sudo ln -sf "$NGINX_SITES_AVAILABLE/watch-party" "$NGINX_SITES_ENABLED/"
     
@@ -1155,6 +1247,10 @@ NGINX_EOF
     fi
     echo "  • Config file: /etc/nginx/sites-available/watch-party"
 }
+
+# =============================================================================
+# SECURITY SETUP
+# =============================================================================
 
 configure_firewall() {
     log_info "Configuring firewall..."
