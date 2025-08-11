@@ -913,27 +913,61 @@ EOF
 clean_nginx_conflicts() {
     log_info "Cleaning up Nginx configuration conflicts..."
     
-    # Check for existing rate limiting zone conflicts
-    local conflicting_files=()
+    # First, let's check what's actually causing the conflict
+    log_info "Analyzing nginx configuration for zone conflicts..."
     
-    # Find files with conflicting zone names
-    if sudo nginx -T 2>/dev/null | grep -l "limit_req_zone.*zone=api:" > /tmp/nginx_conflicts.txt 2>/dev/null; then
-        while read -r file_line; do
-            local file=$(echo "$file_line" | cut -d: -f1)
-            if [[ "$file" != "/etc/nginx/nginx.conf" && "$file" != "/etc/nginx/sites-available/watch-party" ]]; then
-                conflicting_files+=("$file")
+    # Get all nginx configuration files and check for zone conflicts
+    local all_zones=()
+    local conflicting_zones=()
+    
+    # Parse all nginx configurations to find limit_req_zone directives
+    if command -v nginx >/dev/null 2>&1; then
+        # Get the full nginx configuration dump and extract zone information
+        local config_dump=$(sudo nginx -T 2>/dev/null)
+        
+        # Find all limit_req_zone directives
+        while IFS= read -r line; do
+            if [[ "$line" =~ limit_req_zone.*zone=([^[:space:]]+) ]]; then
+                local zone_name="${BASH_REMATCH[1]}"
+                zone_name="${zone_name%;}"  # Remove trailing semicolon
+                all_zones+=("$zone_name")
             fi
-        done < /tmp/nginx_conflicts.txt
-        rm -f /tmp/nginx_conflicts.txt
-    fi
-    
-    if [[ ${#conflicting_files[@]} -gt 0 ]]; then
-        log_warning "Found conflicting rate limiting zones in:"
-        for file in "${conflicting_files[@]}"; do
-            echo "  • $file"
+        done <<< "$config_dump"
+        
+        # Check for duplicate zones
+        local seen_zones=()
+        for zone in "${all_zones[@]}"; do
+            if [[ " ${seen_zones[*]} " =~ " ${zone} " ]]; then
+                if [[ ! " ${conflicting_zones[*]} " =~ " ${zone} " ]]; then
+                    conflicting_zones+=("$zone")
+                fi
+            else
+                seen_zones+=("$zone")
+            fi
         done
-        log_info "Using unique zone names to avoid conflicts"
-        return 1
+        
+        if [[ ${#conflicting_zones[@]} -gt 0 ]]; then
+            log_warning "Found duplicate zone names:"
+            for zone in "${conflicting_zones[@]}"; do
+                echo "  • Zone: $zone"
+            done
+            
+            # If one of the conflicting zones is 'api', we need to remove our old configurations
+            if [[ " ${conflicting_zones[*]} " =~ " api " ]]; then
+                log_warning "Conflict with 'api' zone detected. Cleaning up old configurations..."
+                
+                # Remove any old watch-party configurations that might use 'api' zone
+                sudo rm -f /etc/nginx/sites-enabled/watch-party /etc/nginx/sites-available/watch-party
+                
+                # Remove our rate limiting zones from nginx.conf if they exist
+                if sudo grep -q "limit_req_zone.*zone=api.*# Watch Party" /etc/nginx/nginx.conf 2>/dev/null; then
+                    log_info "Removing old Watch Party rate limiting zones from nginx.conf..."
+                    sudo sed -i '/# Rate limiting zones for Watch Party/,+2d' /etc/nginx/nginx.conf
+                fi
+            fi
+            
+            return 1
+        fi
     fi
     
     return 0
@@ -1472,6 +1506,7 @@ show_help() {
     echo "  fix-permissions        Fix file permissions"
     echo "  config-nginx           Reconfigure Nginx"
     echo "  fix-nginx              Fix Nginx configuration issues"
+    echo "  clean-nginx            Force clean all nginx conflicts"
     echo
     echo "OPTIONS:"
     echo "  --force                Force operations without confirmation"
@@ -1549,6 +1584,18 @@ main() {
             configure_nginx_global
             configure_nginx
             sudo systemctl reload nginx
+            ;;
+        clean-nginx)
+            log_info "Force cleaning nginx configuration conflicts..."
+            clean_nginx_conflicts
+            log_info "Removing all Watch Party nginx configurations..."
+            sudo rm -f /etc/nginx/sites-enabled/watch-party /etc/nginx/sites-available/watch-party
+            if sudo grep -q "Watch Party" /etc/nginx/nginx.conf 2>/dev/null; then
+                log_info "Removing Watch Party zones from nginx.conf..."
+                sudo sed -i '/# Rate limiting zones for Watch Party/,+3d' /etc/nginx/nginx.conf
+                sudo sed -i '/# Watch Party rate limiting zones/,+3d' /etc/nginx/nginx.conf
+            fi
+            log_success "Nginx configuration cleaned"
             ;;
         help|--help|-h)
             show_help

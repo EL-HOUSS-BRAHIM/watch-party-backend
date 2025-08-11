@@ -187,6 +187,7 @@ show_help() {
     echo -e "  ${CYAN}fix-dirs${NC}               Fix directory structure issues"
     echo -e "  ${CYAN}fix-nginx${NC}              Fix Nginx configuration issues"
     echo -e "  ${CYAN}config-nginx${NC}           Reconfigure Nginx"
+    echo -e "  ${CYAN}clean-nginx${NC}            Force clean nginx conflicts"
     echo -e "  ${CYAN}validate-env${NC}           Validate environment configuration"
     echo -e "  ${CYAN}fix-env${NC}                Fix environment issues"
     echo -e "  ${CYAN}setup-env${NC}              Interactive environment setup"
@@ -406,8 +407,8 @@ cmd_fix_nginx() {
     execute_script "$SCRIPTS_DIR/production.sh" "fix-nginx" "$@"
 }
 
-cmd_config_nginx() {
-    execute_script "$SCRIPTS_DIR/production.sh" "config-nginx" "$@"
+cmd_clean_nginx() {
+    execute_script "$SCRIPTS_DIR/production.sh" "clean-nginx" "$@"
 }
 
 # Environment validation commands
@@ -584,6 +585,7 @@ main() {
         fix-dirs)               cmd_fix_dirs "$@" ;;
         fix-nginx)              cmd_fix_nginx "$@" ;;
         config-nginx)           cmd_config_nginx "$@" ;;
+        clean-nginx)            cmd_clean_nginx "$@" ;;
         production)             cmd_prod "$@" ;;
         
         # Environment validation
