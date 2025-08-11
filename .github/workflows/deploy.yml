@@ -62,6 +62,10 @@ jobs:
                   --exclude='.idea' \
                   ./ deployment-package/
 
+        # Create a deployment marker to satisfy deploy script requirements
+        mkdir -p deployment-package/.git
+        echo "deployment" > deployment-package/.git/HEAD
+
         # Create deployment info file
         cat > deployment-package/deployment-info.json << EOF
         {
