@@ -166,6 +166,19 @@ show_help() {
     echo -e "  ${MAGENTA}nginx-config${NC}          Configure Nginx"
     echo -e "  ${MAGENTA}ssl-setup${NC}             Setup SSL certificates"
     echo
+    echo -e "${WHITE}PRODUCTION MANAGEMENT:${NC}"
+    echo -e "  ${CYAN}prod-setup${NC}             Complete production server setup"
+    echo -e "  ${CYAN}prod-start${NC}             Start production services"
+    echo -e "  ${CYAN}prod-stop${NC}              Stop production services"
+    echo -e "  ${CYAN}prod-restart${NC}           Restart production services"
+    echo -e "  ${CYAN}prod-status${NC}            Show production service status"
+    echo -e "  ${CYAN}prod-logs${NC}              View production logs"
+    echo -e "  ${CYAN}check-ports${NC}            Check for port conflicts"
+    echo -e "  ${CYAN}fix-ports${NC}              Resolve port conflicts"
+    echo -e "  ${CYAN}validate-env${NC}           Validate environment configuration"
+    echo -e "  ${CYAN}fix-env${NC}                Fix environment issues"
+    echo -e "  ${CYAN}setup-env${NC}              Interactive environment setup"
+    echo
     echo -e "${WHITE}MAINTENANCE & BACKUP:${NC}"
     echo -e "  ${YELLOW}backup${NC}                 Create project backup"
     echo -e "  ${YELLOW}restore${NC}                Restore from backup"
@@ -192,6 +205,11 @@ show_help() {
     echo
     echo -e "${WHITE}EXAMPLES:${NC}"
     echo "  ./manage.sh dev                     # Start development server"
+    echo "  ./manage.sh prod-setup              # Setup production server"
+    echo "  ./manage.sh prod-status             # Check production status"
+    echo "  ./manage.sh check-ports             # Check for port conflicts"
+    echo "  ./manage.sh validate-env production # Validate production environment"
+    echo "  ./manage.sh fix-env development     # Fix development environment"
     echo "  ./manage.sh deploy --staging        # Deploy to staging"
     echo "  ./manage.sh backup --compress       # Create compressed backup"
     echo "  ./manage.sh clean --deep            # Deep clean with optimization"
@@ -303,6 +321,56 @@ cmd_nginx_config() {
 
 cmd_ssl_setup() {
     execute_script "$SCRIPTS_DIR/ssl-setup.sh" "setup" "$@"
+}
+
+# Production server management commands
+cmd_prod() {
+    execute_script "$SCRIPTS_DIR/production.sh" "$@"
+}
+
+cmd_prod_setup() {
+    execute_script "$SCRIPTS_DIR/production.sh" "setup" "$@"
+}
+
+cmd_prod_start() {
+    execute_script "$SCRIPTS_DIR/production.sh" "start" "$@"
+}
+
+cmd_prod_stop() {
+    execute_script "$SCRIPTS_DIR/production.sh" "stop" "$@"
+}
+
+cmd_prod_restart() {
+    execute_script "$SCRIPTS_DIR/production.sh" "restart" "$@"
+}
+
+cmd_prod_status() {
+    execute_script "$SCRIPTS_DIR/production.sh" "status" "$@"
+}
+
+cmd_prod_logs() {
+    execute_script "$SCRIPTS_DIR/production.sh" "logs" "$@"
+}
+
+cmd_check_ports() {
+    execute_script "$SCRIPTS_DIR/production.sh" "check-ports" "$@"
+}
+
+cmd_fix_ports() {
+    execute_script "$SCRIPTS_DIR/production.sh" "resolve-ports" "$@"
+}
+
+# Environment validation commands
+cmd_validate_env() {
+    execute_script "$SCRIPTS_DIR/env-validator.sh" "validate" "$@"
+}
+
+cmd_fix_env() {
+    execute_script "$SCRIPTS_DIR/env-validator.sh" "fix" "$@"
+}
+
+cmd_setup_env() {
+    execute_script "$SCRIPTS_DIR/env-validator.sh" "interactive" "$@"
 }
 
 # Backup and maintenance commands
@@ -443,6 +511,23 @@ main() {
         nginx-config|nginx)     cmd_nginx_config "$@" ;;
         ssl-setup|ssl)          cmd_ssl_setup "$@" ;;
         
+        # Production management
+        prod)                   cmd_prod "$@" ;;
+        prod-setup)             cmd_prod_setup "$@" ;;
+        prod-start)             cmd_prod_start "$@" ;;
+        prod-stop)              cmd_prod_stop "$@" ;;
+        prod-restart)           cmd_prod_restart "$@" ;;
+        prod-status)            cmd_prod_status "$@" ;;
+        prod-logs)              cmd_prod_logs "$@" ;;
+        check-ports)            cmd_check_ports "$@" ;;
+        fix-ports)              cmd_fix_ports "$@" ;;
+        production)             cmd_prod "$@" ;;
+        
+        # Environment validation
+        validate-env)           cmd_validate_env "$@" ;;
+        fix-env)                cmd_fix_env "$@" ;;
+        setup-env)              cmd_setup_env "$@" ;;
+        
         # Backup and maintenance
         backup)                 cmd_backup "$@" ;;
         restore)                cmd_restore "$@" ;;
@@ -470,6 +555,8 @@ main() {
             echo
             echo "Available commands:"
             echo "  dev, shell, test, migrate, setup, deploy, backup, clean, wipeout"
+            echo "  prod-setup, prod-start, prod-stop, prod-status, check-ports"
+            echo "  validate-env, fix-env, setup-env"
             echo
             echo "Use './manage.sh help' for detailed usage information"
             exit 1

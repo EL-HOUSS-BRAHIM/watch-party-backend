@@ -123,8 +123,8 @@ class NotificationChannel(models.Model):
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100)
-    channel_type = models.CharField(max_length=20, choices=CHANNEL_TYPES)
+    name = models.CharField(max_length=100, default='Default Channel')
+    channel_type = models.CharField(max_length=20, choices=CHANNEL_TYPES, default='email')
     is_active = models.BooleanField(default=True)
     configuration = models.JSONField(default=dict, blank=True)  # Channel-specific config
     delivery_order = models.PositiveIntegerField(default=0)
