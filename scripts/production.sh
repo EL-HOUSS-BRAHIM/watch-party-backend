@@ -452,6 +452,89 @@ validate_env_config() {
 # SYSTEM SETUP
 # =============================================================================
 
+validate_and_fix_directories() {
+    log_info "Validating and fixing directory structure..."
+    
+    # Define all required directories
+    local required_dirs=(
+        "$PRODUCTION_DIR"
+        "$LOG_DIR"
+        "$CONFIG_DIR"
+        "$BACKUP_DIR"
+        "$PRODUCTION_DIR/static"
+        "$PRODUCTION_DIR/media"
+        "$PRODUCTION_DIR/logs"
+        "$NGINX_SITES_AVAILABLE"
+        "$NGINX_SITES_ENABLED"
+        "/var/run/watchparty"
+    )
+    
+    # Define all required log files
+    local required_log_files=(
+        "$LOG_DIR/django.log"
+        "$LOG_DIR/django_errors.log"
+        "$LOG_DIR/gunicorn_access.log"
+        "$LOG_DIR/gunicorn_error.log"
+        "$LOG_DIR/celery.log"
+        "$LOG_DIR/celery-beat.log"
+        "$LOG_DIR/nginx_access.log"
+        "$LOG_DIR/nginx_error.log"
+    )
+    
+    local fixes_needed=0
+    
+    # Check and create directories
+    for dir in "${required_dirs[@]}"; do
+        if [[ ! -d "$dir" ]]; then
+            log_warning "Missing directory: $dir"
+            sudo mkdir -p "$dir"
+            ((fixes_needed++))
+        fi
+    done
+    
+    # Check and create log files
+    for log_file in "${required_log_files[@]}"; do
+        if [[ ! -f "$log_file" ]]; then
+            log_warning "Missing log file: $log_file"
+            sudo touch "$log_file"
+            ((fixes_needed++))
+        fi
+    done
+    
+    # Create symlinks for backwards compatibility if they don't exist
+    if [[ ! -L "$PRODUCTION_DIR/logs/django.log" ]]; then
+        sudo ln -sf "$LOG_DIR/django.log" "$PRODUCTION_DIR/logs/django.log" 2>/dev/null || true
+        ((fixes_needed++))
+    fi
+    
+    if [[ ! -L "$PRODUCTION_DIR/logs/django_errors.log" ]]; then
+        sudo ln -sf "$LOG_DIR/django_errors.log" "$PRODUCTION_DIR/logs/django_errors.log" 2>/dev/null || true
+        ((fixes_needed++))
+    fi
+    
+    # Fix permissions for all directories and files
+    sudo chown -R $USER:www-data "$PRODUCTION_DIR" 2>/dev/null || true
+    sudo chown -R $USER:www-data "$LOG_DIR" 2>/dev/null || true
+    sudo chown -R $USER:www-data "$CONFIG_DIR" 2>/dev/null || true
+    sudo chown -R $USER:www-data "$BACKUP_DIR" 2>/dev/null || true
+    sudo chown -R $USER:www-data /var/run/watchparty 2>/dev/null || true
+    
+    sudo chmod -R 755 "$PRODUCTION_DIR" 2>/dev/null || true
+    sudo chmod -R 755 "$LOG_DIR" 2>/dev/null || true
+    sudo chmod -R 755 "$CONFIG_DIR" 2>/dev/null || true
+    sudo chmod -R 755 "$BACKUP_DIR" 2>/dev/null || true
+    sudo chmod -R 755 /var/run/watchparty 2>/dev/null || true
+    
+    # Set specific permissions for log files
+    sudo chmod 644 "$LOG_DIR"/*.log 2>/dev/null || true
+    
+    if [[ $fixes_needed -gt 0 ]]; then
+        log_success "Fixed $fixes_needed directory/file issues"
+    else
+        log_success "Directory structure validation passed"
+    fi
+}
+
 install_system_dependencies() {
     log_info "Installing system dependencies..."
     
@@ -501,19 +584,46 @@ setup_directories() {
     sudo mkdir -p "$BACKUP_DIR"
     sudo mkdir -p "$PRODUCTION_DIR/static"
     sudo mkdir -p "$PRODUCTION_DIR/media"
+    sudo mkdir -p "$PRODUCTION_DIR/logs"  # For backwards compatibility with base settings
+    
+    # Create Nginx directories if they don't exist
+    sudo mkdir -p "$NGINX_SITES_AVAILABLE"
+    sudo mkdir -p "$NGINX_SITES_ENABLED"
+    
+    # Create systemd runtime directory
+    sudo mkdir -p /var/run/watchparty
+    
+    # Create log files with proper permissions
+    sudo touch "$LOG_DIR/django.log"
+    sudo touch "$LOG_DIR/django_errors.log"
+    sudo touch "$LOG_DIR/gunicorn_access.log"
+    sudo touch "$LOG_DIR/gunicorn_error.log"
+    sudo touch "$LOG_DIR/celery.log"
+    sudo touch "$LOG_DIR/celery-beat.log"
+    sudo touch "$LOG_DIR/nginx_access.log"
+    sudo touch "$LOG_DIR/nginx_error.log"
+    
+    # Create symlinks for backwards compatibility (base settings might still reference these)
+    sudo ln -sf "$LOG_DIR/django.log" "$PRODUCTION_DIR/logs/django.log" 2>/dev/null || true
+    sudo ln -sf "$LOG_DIR/django_errors.log" "$PRODUCTION_DIR/logs/django_errors.log" 2>/dev/null || true
     
     # Set ownership and permissions
     sudo chown -R $USER:www-data "$PRODUCTION_DIR"
     sudo chown -R $USER:www-data "$LOG_DIR"
     sudo chown -R $USER:www-data "$CONFIG_DIR"
     sudo chown -R $USER:www-data "$BACKUP_DIR"
+    sudo chown -R $USER:www-data /var/run/watchparty
     
     sudo chmod -R 755 "$PRODUCTION_DIR"
     sudo chmod -R 755 "$LOG_DIR"
     sudo chmod -R 755 "$CONFIG_DIR"
     sudo chmod -R 755 "$BACKUP_DIR"
+    sudo chmod -R 755 /var/run/watchparty
     
-    log_success "Directories created and configured"
+    # Set specific permissions for log files
+    sudo chmod 644 "$LOG_DIR"/*.log
+    
+    log_success "Directories and log files created and configured"
 }
 
 configure_postgresql() {
@@ -750,7 +860,11 @@ EOF
 configure_nginx() {
     log_info "Configuring Nginx..."
     
-    # Remove default site
+    # Ensure Nginx directories exist
+    sudo mkdir -p "$NGINX_SITES_AVAILABLE"
+    sudo mkdir -p "$NGINX_SITES_ENABLED"
+    
+    # Remove default site if it exists
     sudo rm -f "$NGINX_SITES_ENABLED/default"
     
     # Create Watch Party site configuration
@@ -759,6 +873,10 @@ configure_nginx() {
 server {
     listen $DEFAULT_NGINX_HTTP;
     server_name _;
+
+    # Logging
+    access_log $LOG_DIR/nginx_access.log;
+    error_log $LOG_DIR/nginx_error.log;
 
     client_max_body_size 100M;
     client_body_timeout 300s;
@@ -842,7 +960,8 @@ server {
 }
 EOF
 
-    # Enable site
+    # Ensure the sites-enabled directory exists and enable site
+    sudo mkdir -p "$NGINX_SITES_ENABLED"
     sudo ln -sf "$NGINX_SITES_AVAILABLE/watchparty" "$NGINX_SITES_ENABLED/"
     
     # Test configuration
@@ -1086,6 +1205,9 @@ setup_production() {
     check_root
     check_system
     
+    # Validate and fix any existing directory issues first
+    validate_and_fix_directories
+    
     # Check and resolve port conflicts
     if ! check_port_conflicts; then
         if [[ "${FORCE:-false}" == "true" ]]; then
@@ -1154,6 +1276,7 @@ show_help() {
     echo "SETUP COMMANDS:"
     echo "  setup                  Complete production setup"
     echo "  setup-env              Create production environment file"
+    echo "  validate-dirs          Validate and fix directory structure"
     echo "  check-ports            Check for port conflicts"
     echo "  resolve-ports          Resolve port conflicts"
     echo
@@ -1195,6 +1318,9 @@ main() {
             ;;
         setup-env)
             create_production_env
+            ;;
+        validate-dirs|fix-dirs)
+            validate_and_fix_directories
             ;;
         check-ports)
             check_port_conflicts

@@ -183,6 +183,8 @@ show_help() {
     echo -e "  ${CYAN}prod-logs${NC}              View production logs"
     echo -e "  ${CYAN}check-ports${NC}            Check for port conflicts"
     echo -e "  ${CYAN}fix-ports${NC}              Resolve port conflicts"
+    echo -e "  ${CYAN}validate-dirs${NC}          Validate and fix directory structure"
+    echo -e "  ${CYAN}fix-dirs${NC}               Fix directory structure issues"
     echo -e "  ${CYAN}validate-env${NC}           Validate environment configuration"
     echo -e "  ${CYAN}fix-env${NC}                Fix environment issues"
     echo -e "  ${CYAN}setup-env${NC}              Interactive environment setup"
@@ -219,6 +221,7 @@ show_help() {
     echo "  ./manage.sh env-status              # Show environment status"
     echo "  ./manage.sh prod-setup              # Setup production server"
     echo "  ./manage.sh prod-status             # Check production status"
+    echo "  ./manage.sh validate-dirs           # Fix directory structure issues"
     echo "  ./manage.sh check-ports             # Check for port conflicts"
     echo "  ./manage.sh validate-env production # Validate production environment"
     echo "  ./manage.sh fix-env development     # Fix development environment"
@@ -393,8 +396,12 @@ cmd_check_ports() {
     execute_script "$SCRIPTS_DIR/production.sh" "check-ports" "$@"
 }
 
-cmd_fix_ports() {
-    execute_script "$SCRIPTS_DIR/production.sh" "resolve-ports" "$@"
+cmd_validate_dirs() {
+    execute_script "$SCRIPTS_DIR/production.sh" "validate-dirs" "$@"
+}
+
+cmd_fix_dirs() {
+    execute_script "$SCRIPTS_DIR/production.sh" "fix-dirs" "$@"
 }
 
 # Environment validation commands
@@ -567,6 +574,8 @@ main() {
         prod-logs)              cmd_prod_logs "$@" ;;
         check-ports)            cmd_check_ports "$@" ;;
         fix-ports)              cmd_fix_ports "$@" ;;
+        validate-dirs)          cmd_validate_dirs "$@" ;;
+        fix-dirs)               cmd_fix_dirs "$@" ;;
         production)             cmd_prod "$@" ;;
         
         # Environment validation
