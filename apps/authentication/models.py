@@ -52,6 +52,24 @@ class User(AbstractUser):
     # Remove the username field
     username = None
     
+    # Override groups and user_permissions with custom related_name to avoid conflicts
+    groups = models.ManyToManyField(
+        'auth.Group',
+        verbose_name='groups',
+        blank=True,
+        help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.',
+        related_name='authentication_user_set',
+        related_query_name='authentication_user',
+    )
+    user_permissions = models.ManyToManyField(
+        'auth.Permission',
+        verbose_name='user permissions',
+        blank=True,
+        help_text='Specific permissions for this user.',
+        related_name='authentication_user_set',
+        related_query_name='authentication_user',
+    )
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, verbose_name='Email Address')
     first_name = models.CharField(max_length=150, verbose_name='First Name')
@@ -86,7 +104,7 @@ class User(AbstractUser):
     REQUIRED_FIELDS = ['first_name', 'last_name']
     
     class Meta:
-        db_table = 'auth_user'
+        db_table = 'authentication_user'
         verbose_name = 'User'
         verbose_name_plural = 'Users'
         
