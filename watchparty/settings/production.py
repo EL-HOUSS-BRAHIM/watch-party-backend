@@ -3,6 +3,7 @@ Production settings for Watch Party Backend - Phase 2 Enhanced
 """
 
 from .base import *
+import dj_database_url
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.celery import CeleryIntegration
