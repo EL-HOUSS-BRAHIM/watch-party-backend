@@ -24,8 +24,10 @@ if DATABASE_URL:
         'CONN_MAX_AGE': 0,  # Don't persist connections in tests
         'CONN_HEALTH_CHECKS': False,
         'DISABLE_SERVER_SIDE_CURSORS': False,
+        # Let Django handle test database creation automatically
         'TEST': {
-            'NAME': 'test_watchparty',
+            'CHARSET': 'utf8',
+            'COLLATION': None,
         },
     })
 else:
