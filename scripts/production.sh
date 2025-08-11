@@ -910,21 +910,81 @@ EOF
 # NGINX CONFIGURATION
 # =============================================================================
 
+clean_nginx_conflicts() {
+    log_info "Cleaning up Nginx configuration conflicts..."
+    
+    # Check for existing rate limiting zone conflicts
+    local conflicting_files=()
+    
+    # Find files with conflicting zone names
+    if sudo nginx -T 2>/dev/null | grep -l "limit_req_zone.*zone=api:" > /tmp/nginx_conflicts.txt 2>/dev/null; then
+        while read -r file_line; do
+            local file=$(echo "$file_line" | cut -d: -f1)
+            if [[ "$file" != "/etc/nginx/nginx.conf" && "$file" != "/etc/nginx/sites-available/watch-party" ]]; then
+                conflicting_files+=("$file")
+            fi
+        done < /tmp/nginx_conflicts.txt
+        rm -f /tmp/nginx_conflicts.txt
+    fi
+    
+    if [[ ${#conflicting_files[@]} -gt 0 ]]; then
+        log_warning "Found conflicting rate limiting zones in:"
+        for file in "${conflicting_files[@]}"; do
+            echo "  • $file"
+        done
+        log_info "Using unique zone names to avoid conflicts"
+        return 1
+    fi
+    
+    return 0
+}
+
 configure_nginx_global() {
     log_info "Configuring global Nginx settings..."
     
+    # Clean up any conflicts first
+    clean_nginx_conflicts
+    local has_conflicts=$?
+    
+    # Check for existing rate limiting zones that might conflict
+    if sudo nginx -T 2>/dev/null | grep -q "limit_req_zone.*zone=watchparty_api"; then
+        log_info "Watch Party rate limiting zones already configured"
+        export WATCHPARTY_API_ZONE="watchparty_api"
+        export WATCHPARTY_WS_ZONE="watchparty_ws"
+        return 0
+    fi
+    
+    # Determine zone suffix based on conflicts
+    local zone_suffix=""
+    if [[ $has_conflicts -eq 1 ]] || sudo nginx -T 2>/dev/null | grep -q "limit_req_zone.*zone=api:"; then
+        log_warning "Detected zone name conflicts, using unique suffixes"
+        zone_suffix="_wp$(date +%s | tail -c 4)"  # Add timestamp suffix for uniqueness
+    fi
+    
     # Add rate limiting configuration to nginx.conf if not already present
-    if ! sudo grep -q "limit_req_zone" /etc/nginx/nginx.conf; then
-        log_info "Adding rate limiting zones to nginx.conf..."
-        # Create a temporary file with the new configuration
-        sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+    if ! sudo grep -q "limit_req_zone.*zone=watchparty_api" /etc/nginx/nginx.conf; then
+        log_info "Adding Watch Party rate limiting zones to nginx.conf..."
         
-        # Insert rate limiting configuration after the http directive
-        sudo sed -i '/http {/a\\n\t# Rate limiting zones for Watch Party\n\tlimit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;\n\tlimit_req_zone $binary_remote_addr zone=websocket:10m rate=50r/s;\n' /etc/nginx/nginx.conf
+        # Create backup if it doesn't exist
+        if [[ ! -f /etc/nginx/nginx.conf.backup ]]; then
+            sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+        fi
         
-        log_success "Rate limiting zones added to nginx.conf"
+        # Insert rate limiting configuration after the http directive with unique zone names
+        local api_zone="watchparty_api${zone_suffix}"
+        local ws_zone="watchparty_ws${zone_suffix}"
+        
+        sudo sed -i "/http {/a\\\\n\\t# Rate limiting zones for Watch Party Backend\\n\\tlimit_req_zone \$binary_remote_addr zone=${api_zone}:10m rate=10r/s;\\n\\tlimit_req_zone \$binary_remote_addr zone=${ws_zone}:10m rate=50r/s;\\n" /etc/nginx/nginx.conf
+        
+        # Export zone names for use in site configuration
+        export WATCHPARTY_API_ZONE="$api_zone"
+        export WATCHPARTY_WS_ZONE="$ws_zone"
+        
+        log_success "Watch Party rate limiting zones added: $api_zone, $ws_zone"
     else
-        log_info "Rate limiting zones already configured in nginx.conf"
+        log_info "Watch Party rate limiting zones already configured in nginx.conf"
+        export WATCHPARTY_API_ZONE="watchparty_api${zone_suffix}"
+        export WATCHPARTY_WS_ZONE="watchparty_ws${zone_suffix}"
     fi
 }
 
@@ -933,6 +993,17 @@ configure_nginx() {
     
     # Configure global nginx settings first
     configure_nginx_global
+    
+    # Set default zone names if not set by global config
+    local api_zone="${WATCHPARTY_API_ZONE:-}"
+    local ws_zone="${WATCHPARTY_WS_ZONE:-}"
+    local use_rate_limiting=true
+    
+    # If zones are empty, disable rate limiting to avoid conflicts
+    if [[ -z "$api_zone" || -z "$ws_zone" ]]; then
+        log_warning "Rate limiting zones not available, creating configuration without rate limiting"
+        use_rate_limiting=false
+    fi
     
     # Ensure Nginx directories exist
     sudo mkdir -p "$NGINX_SITES_AVAILABLE"
@@ -945,8 +1016,110 @@ configure_nginx() {
     sudo rm -f "$NGINX_SITES_ENABLED/watchparty"
     sudo rm -f "$NGINX_SITES_AVAILABLE/watchparty"
     
-    # Create Watch Party site configuration (using watch-party to match existing nginx.conf)
-    sudo tee "$NGINX_SITES_AVAILABLE/watch-party" > /dev/null << EOF
+    # Create Watch Party site configuration with conditional rate limiting
+    log_info "Creating Watch Party site configuration..."
+    
+    # Create the configuration file
+    sudo tee "$NGINX_SITES_AVAILABLE/watch-party" > /dev/null << NGINX_EOF
+# Watch Party Backend Nginx Configuration
+server {
+    listen $DEFAULT_NGINX_HTTP;
+    server_name _;
+
+    # Logging
+    access_log $LOG_DIR/nginx_access.log;
+    error_log $LOG_DIR/nginx_error.log;
+
+    client_max_body_size 100M;
+    client_body_timeout 300s;
+    client_header_timeout 300s;
+    
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+
+    # Static files
+    location /static/ {
+        alias $PRODUCTION_DIR/static/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        add_header Vary Accept-Encoding;
+        gzip_static on;
+    }
+
+    # Media files
+    location /media/ {
+        alias $PRODUCTION_DIR/media/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # WebSocket connections
+    location /ws/ {
+        proxy_pass http://127.0.0.1:$DEFAULT_WEBSOCKET_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # API and application
+    location / {
+        proxy_pass http://127.0.0.1:$DEFAULT_HTTP_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # Health check endpoint (no rate limiting)
+    location /health/ {
+        proxy_pass http://127.0.0.1:$DEFAULT_HTTP_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        access_log off;
+    }
+
+    # Deny access to sensitive files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+    
+    location ~ /(\.env|requirements\.txt|manage\.py)$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+}
+NGINX_EOF
+
+    # Add rate limiting to the configuration if zones are available
+    if [[ "$use_rate_limiting" == "true" && -n "$api_zone" && -n "$ws_zone" ]]; then
+        log_info "Adding rate limiting to configuration..."
+        
+        # Add rate limiting to the API location
+        sudo sed -i "/location \/ {/a\\        # Apply API rate limiting\\n        limit_req zone=$api_zone burst=20 nodelay;\\n" "$NGINX_SITES_AVAILABLE/watch-party"
+        
+        # Add rate limiting to the WebSocket location
+        sudo sed -i "/location \/ws\/ {/a\\        # Apply WebSocket rate limiting\\n        limit_req zone=$ws_zone burst=50 nodelay;\\n" "$NGINX_SITES_AVAILABLE/watch-party"
+        
+        log_success "Rate limiting added to configuration"
+    fi
 # Watch Party Backend Nginx Configuration
 server {
     listen $DEFAULT_NGINX_HTTP;
@@ -1035,15 +1208,25 @@ server {
         log_not_found off;
     }
 }
-EOF
+NGINX_EOF
 
-    # Ensure the sites-enabled directory exists and enable site (using watch-party filename)
+    # Ensure the sites-enabled directory exists and enable site
     sudo mkdir -p "$NGINX_SITES_ENABLED"
     sudo ln -sf "$NGINX_SITES_AVAILABLE/watch-party" "$NGINX_SITES_ENABLED/"
+    
+    log_info "Testing Nginx configuration..."
     
     # Test configuration
     if ! sudo nginx -t; then
         log_error "Nginx configuration test failed"
+        if [[ "$use_rate_limiting" == "true" ]]; then
+            log_info "Configuration details:"
+            echo "  • API Zone: ${api_zone:-not set}"
+            echo "  • WebSocket Zone: ${ws_zone:-not set}"
+        else
+            log_info "Configuration created without rate limiting due to conflicts"
+        fi
+        echo "  • Config file: /etc/nginx/sites-available/watch-party"
         return 1
     fi
     
@@ -1051,7 +1234,15 @@ EOF
     sudo systemctl start nginx
     sudo systemctl enable nginx
     
-    log_success "Nginx configured"
+    log_success "Nginx configured successfully"
+    if [[ "$use_rate_limiting" == "true" ]]; then
+        log_info "Rate limiting enabled:"
+        echo "  • API Zone: $api_zone"
+        echo "  • WebSocket Zone: $ws_zone"
+    else
+        log_info "Rate limiting disabled due to conflicts"
+    fi
+    echo "  • Config file: /etc/nginx/sites-available/watch-party"
 }
 
 # =============================================================================
