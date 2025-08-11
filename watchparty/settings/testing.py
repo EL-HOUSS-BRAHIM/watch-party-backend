@@ -34,7 +34,7 @@ if DATABASE_URL:
         DATABASES['default']['OPTIONS'] = {
             # Use correct quoting for value with space (CI previously failed with ""read" parsing issue)
             # Note: default is already 'read committed'; this explicit setting ensures consistency in CI.
-            'options': "-c default_transaction_isolation='read committed'"
+            'options': '-c default_transaction_isolation="read committed"'
         }
 else:
     # Use in-memory SQLite for local testing
