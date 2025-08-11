@@ -51,6 +51,23 @@ PASSWORD_HASHERS = [
 
 # Disable logging during tests
 LOGGING_CONFIG = None
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'null': {
+            'class': 'logging.NullHandler',
+        },
+    },
+    'root': {
+        'handlers': ['null'],
+    },
+}
+
+# Silence Django system check warnings for testing
+SILENCED_SYSTEM_CHECKS = [
+    'models.W042',  # Auto-created primary key warnings
+]
 
 # Use console email backend for tests
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
