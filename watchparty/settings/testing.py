@@ -13,15 +13,36 @@ DEBUG = True
 DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL:
     # Use the provided database URL (for GitHub Actions)
+    import dj_database_url
     DATABASES = {
         'default': dj_database_url.parse(DATABASE_URL)
     }
+    # Override connection settings for PostgreSQL in CI
+    DATABASES['default'].update({
+        'CONN_MAX_AGE': 0,  # Don't persist connections in tests
+        'OPTIONS': {},
+        'TEST': {
+            'NAME': 'test_watchparty',
+        },
+    })
+    
+    # If it's PostgreSQL, add specific options
+    if 'postgresql' in DATABASE_URL or 'postgres' in DATABASE_URL:
+        DATABASES['default']['OPTIONS'] = {
+            'options': '-c default_transaction_isolation=read_committed'
+        }
 else:
     # Use in-memory SQLite for local testing
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': ':memory:',
+            'OPTIONS': {
+                'timeout': 20,
+            },
+            'TEST': {
+                'NAME': ':memory:',
+            },
         }
     }
 
@@ -31,10 +52,11 @@ STATIC_ROOT = BASE_DIR / 'test_static'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'test_media'
 
-# Disable migrations for tests (but allow them for CI)
+# Force migrations to be enabled in CI environment
 USE_MIGRATIONS = os.environ.get('USE_MIGRATIONS', 'false').lower() == 'true'
 
-if not USE_MIGRATIONS:
+# Only disable migrations for local testing
+if not USE_MIGRATIONS and not DATABASE_URL:
     class DisableMigrations:
         def __contains__(self, item):
             return True
