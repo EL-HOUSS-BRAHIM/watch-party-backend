@@ -135,7 +135,7 @@ jobs:
           
           echo "$(date): 🔧 Starting server environment setup..."
           echo "Deploy directory: $DEPLOY_DIR"
-          echo "Service user: $SERVICE_USER"
+            echo "Service user: $SERVICE_USER"
           
           # Update system packages
           echo "$(date): 📦 Detecting package manager..."
@@ -156,28 +156,32 @@ jobs:
             exit 1
           fi
           
-          # Install essential packages
+          # Install essential packages (always ensure venv & pip available)
           echo "📦 Installing essential packages..."
-          if ! command -v python3 >/dev/null 2>&1; then
-            echo "Installing Python 3..."
-            sudo $INSTALLER python3 python3-pip python3-venv python3-dev
+          if command -v apt-get >/dev/null 2>&1; then
+            PY_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' || echo "")
+            # Always attempt to install venv & pip even if python3 exists
+            sudo apt-get install -y python3-venv python3-pip python3-dev || true
+            if [[ -n "$PY_MINOR" ]]; then
+              sudo apt-get install -y "python${PY_MINOR}-venv" || true
+            fi
+          else
+            # For yum/dnf based distros
+            sudo $INSTALLER python3 python3-pip || true
           fi
           
           if ! command -v nginx >/dev/null 2>&1; then
             echo "Installing Nginx..."
             sudo $INSTALLER nginx
           fi
-          
-            if ! command -v curl >/dev/null 2>&1; then
+          if ! command -v curl >/dev/null 2>&1; then
             echo "Installing curl..."
             sudo $INSTALLER curl
           fi
-          
           if ! command -v git >/dev/null 2>&1; then
             echo "Installing git..."
             sudo $INSTALLER git
           fi
-          
           if ! command -v rsync >/dev/null 2>&1; then
             echo "Installing rsync..."
             sudo $INSTALLER rsync
@@ -188,6 +192,22 @@ jobs:
             sudo $INSTALLER build-essential libpq-dev
           elif command -v yum >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then
             sudo $INSTALLER gcc gcc-c++ make postgresql-devel
+          fi
+          
+          # Verify venv capability explicitly
+          if ! python3 -m venv --help >/dev/null 2>&1; then
+            echo "⚠️ python3-venv still missing, retrying install..."
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get install -y python3-venv || true
+              PY_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' || echo "")
+              if [[ -n "$PY_MINOR" ]]; then
+                sudo apt-get install -y "python${PY_MINOR}-venv" || true
+              fi
+            fi
+          fi
+          if ! python3 -m venv --help >/dev/null 2>&1; then
+            echo "❌ Still cannot create virtual environments (ensurepip/venv missing). Aborting."
+            exit 1
           fi
           
           # Create service user if it doesn't exist
@@ -201,7 +221,6 @@ jobs:
           sudo mkdir -p "$DEPLOY_DIR"
           sudo mkdir -p /var/log/watchparty
           sudo chown -R $SERVICE_USER:www-data /var/log/watchparty || sudo chown -R $SERVICE_USER:$SERVICE_USER /var/log/watchparty
-          # Ensure deploy can write; rsync will run with sudo anyway
           
           # Configure Nginx if not already configured
           if [[ ! -f /etc/nginx/sites-available/watchparty ]]; then
@@ -238,18 +257,13 @@ jobs:
           }
           NGINXCONF
             
-            # Enable the site
             sudo ln -sf /etc/nginx/sites-available/watchparty /etc/nginx/sites-enabled/ || true
             sudo rm -f /etc/nginx/sites-enabled/default || true
-            
-            # Test and reload nginx
             sudo nginx -t && sudo systemctl reload nginx || echo "Nginx configuration needs manual review"
           fi
           
-          # Start and enable nginx
           sudo systemctl enable nginx || true
           sudo systemctl start nginx || true
-          
           echo "✅ Server setup completed"
           
           mkdir -p "$DEPLOY_DIR"
@@ -263,15 +277,17 @@ jobs:
           fi
           
           cd "$DEPLOY_DIR"
-          if [[ ! -d venv ]]; then sudo -u $SERVICE_USER python3 -m venv venv; fi
+          if [[ ! -d venv ]]; then
+            echo "🛠 Creating virtual environment as $SERVICE_USER..."
+            sudo -u $SERVICE_USER -H python3 -m venv venv
+          fi
           source venv/bin/activate
+          python -m ensurepip --upgrade || true
           pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
           pip install gunicorn gevent
           python manage.py migrate --noinput || true
           python manage.py collectstatic --noinput || true
-          
-          # Ensure final ownership (in case virtualenv created as root)
           sudo chown -R $SERVICE_USER:www-data "$DEPLOY_DIR"
           
           if [[ ! -f /etc/systemd/system/watchparty-gunicorn.service ]]; then
@@ -303,7 +319,6 @@ jobs:
             sudo systemctl enable watchparty-gunicorn
           fi
           
-          # Configure basic firewall if ufw is available
           if command -v ufw >/dev/null 2>&1; then
             echo "🔥 Configuring firewall..."
             sudo ufw --force enable || true
@@ -316,28 +331,20 @@ jobs:
           sleep 5
           
           echo "🏥 Running health checks..."
-          # Check if gunicorn is running
           if sudo systemctl is-active --quiet watchparty-gunicorn; then
             echo "✅ Gunicorn service is running"
           else
             echo "❌ Gunicorn service failed to start"
             sudo systemctl status watchparty-gunicorn --no-pager -l || true
           fi
-          
-          # Check if nginx is running
           if sudo systemctl is-active --quiet nginx; then
             echo "✅ Nginx service is running"
           else
             echo "❌ Nginx service is not running"
             sudo systemctl status nginx --no-pager -l || true
           fi
-          
-          # Test application health
           curl -f http://127.0.0.1:8000/health/ >/dev/null 2>&1 && echo "✅ Application health check passed" || echo "⚠️ Application health check failed"
-          
-          # Test nginx proxy
           curl -f http://127.0.0.1/health/ >/dev/null 2>&1 && echo "✅ Nginx proxy health check passed" || echo "⚠️ Nginx proxy health check failed"
-          
           echo "🚀 Deployment completed!"
           SCRIPT
           chmod +x ci_remote_deploy.sh
