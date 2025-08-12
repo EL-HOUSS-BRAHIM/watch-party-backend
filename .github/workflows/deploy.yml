@@ -234,13 +234,18 @@ jobs:
           fi
 
           # Create service user if missing
-            if ! id "$SERVICE_USER" >/dev/null 2>&1; then
-              sudo useradd -r -s /usr/sbin/nologin -d /var/www -c "WatchParty Service User" "$SERVICE_USER" || true
-            fi
+          if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+            sudo useradd -r -s /usr/sbin/nologin -d /var/www -c "WatchParty Service User" "$SERVICE_USER" || true
+          fi
 
           # Directory setup & ownership BEFORE rsync
           sudo mkdir -p "$DEPLOY_DIR" /var/log/watchparty
           sudo chown -R $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR" /var/log/watchparty
+          # Ensure application log directory exists
+          sudo mkdir -p "$DEPLOY_DIR/logs"
+          sudo touch "$DEPLOY_DIR/logs/django.log"
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR/logs"
+          sudo chmod 664 "$DEPLOY_DIR/logs/django.log" || true
 
           echo "📤 Syncing project files to $DEPLOY_DIR";
           sudo rsync -av --delete --exclude='venv' --exclude='.env' --chown=$SERVICE_USER:$SERVICE_GROUP ./ "$DEPLOY_DIR/"
@@ -254,19 +259,27 @@ jobs:
 
           cd "$DEPLOY_DIR"
           echo "🔧 Ensuring clean & writable virtual environment"
-          if [[ -d venv && ! -w venv/bin ]]; then
-            echo "Existing venv not writable by $SERVICE_USER; removing"
-            sudo rm -rf venv
+          if [[ -d venv ]]; then
+            OWNER=$(stat -c %U venv || echo unknown)
+            if [[ "$OWNER" != "$SERVICE_USER" ]]; then
+              echo "Existing venv owned by $OWNER; removing with sudo"
+              sudo rm -rf venv || { echo "Failed to remove existing venv"; exit 1; }
+            elif [[ ! -w venv/bin/python* ]]; then
+              echo "Existing venv not writable; removing"
+              sudo rm -rf venv || { echo "Failed to remove unwritable venv"; exit 1; }
+            fi
           fi
           if [[ -d venv && ! -f venv/bin/activate ]]; then
             echo "Corrupted venv detected; removing"
-            sudo rm -rf venv
+            sudo rm -rf venv || { echo "Failed to remove corrupted venv"; exit 1; }
           fi
           if [[ ! -d venv ]]; then
             echo "Creating venv as $SERVICE_USER"
             sudo -u $SERVICE_USER -H python3 -m venv venv || { echo "Failed to create venv"; exit 1; }
           fi
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP venv
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP venv || true
+          # Verify site-packages writable
+          sudo -u $SERVICE_USER -H bash -c 'python - <<PY\nimport sys,os,glob;\nsp=[p for p in sys.path if p.endswith("site-packages")];\nsp=sp[0] if sp else "";\nprint("Site-packages:", sp);\nexit(0 if (sp and os.access(sp, os.W_OK)) else 1)\nPY' || { echo "site-packages not writable for $SERVICE_USER"; ls -ld venv/lib/python*/site-packages || true; exit 1; }
 
           echo "📦 Installing Python dependencies as $SERVICE_USER"
           sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -m ensurepip --upgrade || true && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt && pip install gunicorn gevent'
