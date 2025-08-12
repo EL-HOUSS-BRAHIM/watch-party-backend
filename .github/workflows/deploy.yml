@@ -124,21 +124,32 @@ jobs:
         run: |
           cat > ci_remote_deploy.sh << 'SCRIPT'
           #!/bin/bash
-          set -e
+          set -euo pipefail  # Strict error handling
+          
+          # Enable logging
+          exec 1> >(tee -a /tmp/deployment.log)
+          exec 2> >(tee -a /tmp/deployment.log >&2)
+          
           DEPLOY_DIR="${DEPLOY_DIR:-/var/www/watch-party-backend}"
           SERVICE_USER="${SERVER_USER:-www-data}"
           
-          echo "🔧 Setting up server environment..."
+          echo "$(date): 🔧 Starting server environment setup..."
+          echo "Deploy directory: $DEPLOY_DIR"
+          echo "Service user: $SERVICE_USER"
           
           # Update system packages
+          echo "$(date): 📦 Detecting package manager..."
           if command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get update -qq
+            echo "Using apt-get (Debian/Ubuntu)"
+            sudo apt-get update -qq || { echo "Failed to update packages"; exit 1; }
             INSTALLER="apt-get install -y"
           elif command -v yum >/dev/null 2>&1; then
-            sudo yum update -y -q
+            echo "Using yum (RHEL/CentOS)"
+            sudo yum update -y -q || { echo "Failed to update packages"; exit 1; }
             INSTALLER="yum install -y"
           elif command -v dnf >/dev/null 2>&1; then
-            sudo dnf update -y -q
+            echo "Using dnf (Fedora/RHEL 8+)"
+            sudo dnf update -y -q || { echo "Failed to update packages"; exit 1; }
             INSTALLER="dnf install -y"
           else
             echo "❌ Unsupported package manager"
@@ -328,13 +339,76 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           PROJECT_DIR: ${{ secrets.PROJECT_DIR }}
+        timeout-minutes: 30
         run: |
           FALLBACK_DIR="/var/www/watch-party-backend"
           TARGET_DIR="${PROJECT_DIR:-$FALLBACK_DIR}"
+          
+          echo "🚀 Starting deployment to $SERVER_HOST..."
+          echo "Target directory: $TARGET_DIR"
+          
+          # Test SSH connection first
+          echo "🔗 Testing SSH connection..."
+          if ! ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "echo 'SSH connection successful'"; then
+            echo "❌ SSH connection failed"
+            exit 1
+          fi
+          
+          # Clean up and prepare remote directory
+          echo "🧹 Preparing remote directory..."
           ssh $SERVER_USER@$SERVER_HOST "rm -rf /tmp/watchparty-deploy && mkdir -p /tmp/watchparty-deploy"
-          scp -r deployment-package/* $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
-          scp ci_remote_deploy.sh $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
-          ssh $SERVER_USER@$SERVER_HOST "cd /tmp/watchparty-deploy && DEPLOY_DIR=$TARGET_DIR SERVER_USER=$SERVER_USER bash ./ci_remote_deploy.sh"
+          
+          # Upload files with progress
+          echo "📤 Uploading deployment files..."
+          scp -o StrictHostKeyChecking=no -r deployment-package/* $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
+          scp -o StrictHostKeyChecking=no ci_remote_deploy.sh $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
+          
+          # Execute deployment with timeout
+          echo "⚙️ Executing remote deployment script..."
+          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "cd /tmp/watchparty-deploy && timeout 1200 bash -x ./ci_remote_deploy.sh" || {
+            echo "❌ Deployment script failed or timed out"
+            echo "🔍 Checking for any error logs..."
+            ssh $SERVER_USER@$SERVER_HOST "tail -50 /var/log/watchparty/error.log 2>/dev/null || echo 'No error log found yet'"
+            exit 1
+          }
+          
+          echo "✅ Remote deployment completed successfully"
+      - name: Post-deployment verification
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          echo "🔍 Running post-deployment verification..."
+          
+          # Wait a moment for services to stabilize
+          sleep 10
+          
+          # Check service status
+          echo "Checking systemd services..."
+          ssh $SERVER_USER@$SERVER_HOST "
+            echo '=== Gunicorn Service Status ==='
+            sudo systemctl status watchparty-gunicorn --no-pager -l || true
+            echo
+            echo '=== Nginx Service Status ==='
+            sudo systemctl status nginx --no-pager -l || true
+            echo
+            echo '=== Recent Logs ==='
+            tail -20 /var/log/watchparty/error.log 2>/dev/null || echo 'No error log found'
+          "
+          
+          # Test endpoints
+          echo "Testing application endpoints..."
+          if ssh $SERVER_USER@$SERVER_HOST "curl -f -m 10 http://127.0.0.1:8000/health/ >/dev/null 2>&1"; then
+            echo "✅ Direct application health check passed"
+          else
+            echo "⚠️ Direct application health check failed"
+          fi
+          
+          if ssh $SERVER_USER@$SERVER_HOST "curl -f -m 10 http://127.0.0.1/health/ >/dev/null 2>&1"; then
+            echo "✅ Nginx proxy health check passed"
+          else
+            echo "⚠️ Nginx proxy health check failed"
+          fi
       - name: Notify deployment status
         if: always()
         run: |
