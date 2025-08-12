@@ -4,6 +4,9 @@ Advanced Analytics Views for Watch Party Backend
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import GenericAPIView
+from rest_framework import status
+from rest_framework.response import Response
 from django.db.models import Q, Count, Sum, Avg, F
 from django.utils import timezone
 from datetime import timedelta
@@ -14,127 +17,138 @@ from apps.analytics.models import SystemAnalytics, AnalyticsEvent, UserAnalytics
 from apps.parties.models import WatchParty, PartyParticipant, PartyEngagementAnalytics
 from apps.videos.models import Video
 from apps.users.models import User
+from .serializers import (
+    PlatformOverviewSerializer, UserBehaviorRequestSerializer, 
+    ContentPerformanceRequestSerializer, RevenueAnalyticsRequestSerializer,
+    UserPersonalAnalyticsRequestSerializer, RealTimeAnalyticsRequestSerializer,
+    VideoDetailedAnalyticsRequestSerializer, UserBehaviorDetailedRequestSerializer,
+    PredictiveAnalyticsRequestSerializer, ComparativeAnalyticsRequestSerializer
+)
 
 
-@api_view(['GET'])
-@permission_classes([IsAdminUser])
-def platform_overview_analytics(request):
-    """Get comprehensive platform analytics overview"""
-    try:
-        # Time range filtering
-        days = int(request.GET.get('days', 30))
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=days)
-        
-        # User growth analytics
-        user_growth = User.objects.filter(
-            date_joined__gte=start_date
-        ).extra(
-            select={'day': "date(date_joined)"}
-        ).values('day').annotate(
-            new_users=Count('id')
-        ).order_by('day')
-        
-        # Content creation analytics
-        content_growth = {
-            'videos': Video.objects.filter(
-                created_at__gte=start_date
-            ).extra(
-                select={'day': "date(created_at)"}
-            ).values('day').annotate(
-                count=Count('id')
-            ).order_by('day'),
+class PlatformOverviewAnalyticsView(GenericAPIView):
+    """Platform overview analytics endpoint"""
+    
+    permission_classes = [IsAdminUser]
+    serializer_class = PlatformOverviewSerializer
+    
+    def get(self, request):
+        """Get comprehensive platform analytics overview"""
+        try:
+            # Time range filtering
+            days = int(request.GET.get('days', 30))
+            end_date = timezone.now()
+            start_date = end_date - timedelta(days=days)
             
-            'parties': WatchParty.objects.filter(
-                created_at__gte=start_date
+            # User growth analytics
+            user_growth = User.objects.filter(
+                date_joined__gte=start_date
             ).extra(
-                select={'day': "date(created_at)"}
+                select={'day': "date(date_joined)"}
             ).values('day').annotate(
-                count=Count('id')
+                new_users=Count('id')
             ).order_by('day')
-        }
-        
-        # Engagement metrics
-        engagement_metrics = {
-            'total_watch_time': PartyEngagementAnalytics.objects.aggregate(
-                total=Sum('average_watch_time')
-            )['total'] or timedelta(0),
-            'average_session_duration': UserAnalytics.objects.filter(
-                date__gte=start_date.date()
-            ).aggregate(
-                avg_session=Avg('average_session_duration')
-            )['avg_session'] or timedelta(0),
-            'total_reactions': PartyEngagementAnalytics.objects.aggregate(
-                total=Sum('most_rewound_timestamp')
-            )['total'] or 0,
-            'chat_messages': PartyEngagementAnalytics.objects.aggregate(
-                total=Sum('chat_activity_score')
-            )['total'] or 0
-        }
-        
-        # Popular content analytics
-        popular_content = {
-            'top_videos': Video.objects.annotate(
-                party_count=Count('parties')
-            ).order_by('-party_count')[:10].values(
-                'id', 'title', 'party_count'
-            ),
             
-            'trending_parties': WatchParty.objects.filter(
-                created_at__gte=start_date
-            ).annotate(
-                engagement_score=F('total_reactions') + F('total_chat_messages')
-            ).order_by('-engagement_score')[:10].values(
-                'id', 'title', 'engagement_score', 'total_viewers'
-            )
-        }
-        
-        # Geographic distribution
-        geographic_data = User.objects.exclude(
-            country__isnull=True
-        ).values('country').annotate(
-            user_count=Count('id')
-        ).order_by('-user_count')[:20]
-        
-        # Platform health metrics
-        health_metrics = {
-            'active_users_24h': User.objects.filter(
-                last_login__gte=timezone.now() - timedelta(hours=24)
-            ).count(),
-            'concurrent_parties': WatchParty.objects.filter(
-                status='live'
-            ).count(),
-            'system_uptime': _calculate_system_uptime(start_date),
-            'error_rate': _calculate_error_rate(start_date)
-        }
-        
-        return StandardResponse.success({
-            'time_range': {
-                'start_date': start_date.isoformat(),
-                'end_date': end_date.isoformat(),
-                'days': days
-            },
-            'user_growth': list(user_growth),
-            'content_growth': {
-                'videos': list(content_growth['videos']),
-                'parties': list(content_growth['parties'])
-            },
-            'engagement_metrics': {
-                'total_watch_time_hours': engagement_metrics['total_watch_time'].total_seconds() / 3600,
-                'average_session_minutes': engagement_metrics['average_session_duration'].total_seconds() / 60,
-                'total_reactions': engagement_metrics['total_reactions'],
-                'chat_messages': engagement_metrics['chat_messages']
-            },
-            'popular_content': {
-                'top_videos': list(popular_content['top_videos']),
-                'trending_parties': list(popular_content['trending_parties'])
-            },
-            'geographic_distribution': list(geographic_data),
-            'platform_health': health_metrics
-        }, "Platform analytics retrieved successfully")
-        
-    except Exception as e:
-        return StandardResponse.error(f"Error retrieving platform analytics: {str(e)}")
+            # Content creation analytics
+            content_growth = {
+                'videos': Video.objects.filter(
+                    created_at__gte=start_date
+                ).extra(
+                    select={'day': "date(created_at)"}
+                ).values('day').annotate(
+                    count=Count('id')
+                ).order_by('day'),
+                
+                'parties': WatchParty.objects.filter(
+                    created_at__gte=start_date
+                ).extra(
+                    select={'day': "date(created_at)"}
+                ).values('day').annotate(
+                    count=Count('id')
+                ).order_by('day')
+            }
+            
+            # Engagement metrics
+            engagement_metrics = {
+                'total_watch_time': PartyEngagementAnalytics.objects.aggregate(
+                    total=Sum('average_watch_time')
+                )['total'] or timedelta(0),
+                'average_session_duration': UserAnalytics.objects.filter(
+                    date__gte=start_date.date()
+                ).aggregate(
+                    avg_session=Avg('average_session_duration')
+                )['avg_session'] or timedelta(0),
+                'total_reactions': PartyEngagementAnalytics.objects.aggregate(
+                    total=Sum('most_rewound_timestamp')
+                )['total'] or 0,
+                'chat_messages': PartyEngagementAnalytics.objects.aggregate(
+                    total=Sum('chat_activity_score')
+                )['total'] or 0
+            }
+            
+            # Popular content analytics
+            popular_content = {
+                'top_videos': Video.objects.annotate(
+                    party_count=Count('parties')
+                ).order_by('-party_count')[:10].values(
+                    'id', 'title', 'party_count'
+                ),
+                
+                'trending_parties': WatchParty.objects.filter(
+                    created_at__gte=start_date
+                ).annotate(
+                    engagement_score=F('total_reactions') + F('total_chat_messages')
+                ).order_by('-engagement_score')[:10].values(
+                    'id', 'title', 'engagement_score', 'total_viewers'
+                )
+            }
+            
+            # Geographic distribution
+            geographic_data = User.objects.exclude(
+                country__isnull=True
+            ).values('country').annotate(
+                user_count=Count('id')
+            ).order_by('-user_count')[:20]
+            
+            # Platform health metrics
+            health_metrics = {
+                'active_users_24h': User.objects.filter(
+                    last_login__gte=timezone.now() - timedelta(hours=24)
+                ).count(),
+                'concurrent_parties': WatchParty.objects.filter(
+                    status='live'
+                ).count(),
+                'system_uptime': _calculate_system_uptime(start_date),
+                'error_rate': _calculate_error_rate(start_date)
+            }
+            
+            return StandardResponse.success({
+                'time_range': {
+                    'start_date': start_date.isoformat(),
+                    'end_date': end_date.isoformat(),
+                    'days': days
+                },
+                'user_growth': list(user_growth),
+                'content_growth': {
+                    'videos': list(content_growth['videos']),
+                    'parties': list(content_growth['parties'])
+                },
+                'engagement_metrics': {
+                    'total_watch_time_hours': engagement_metrics['total_watch_time'].total_seconds() / 3600,
+                    'average_session_minutes': engagement_metrics['average_session_duration'].total_seconds() / 60,
+                    'total_reactions': engagement_metrics['total_reactions'],
+                    'chat_messages': engagement_metrics['chat_messages']
+                },
+                'popular_content': {
+                    'top_videos': list(popular_content['top_videos']),
+                    'trending_parties': list(popular_content['trending_parties'])
+                },
+                'geographic_distribution': list(geographic_data),
+                'platform_health': health_metrics
+            }, "Platform analytics retrieved successfully")
+            
+        except Exception as e:
+            return StandardResponse.error(f"Error retrieving platform analytics: {str(e)}")
 
 
 @api_view(['GET'])

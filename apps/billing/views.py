@@ -17,9 +17,11 @@ from .models import (
     Invoice, Payment, BillingAddress, PromotionalCode
 )
 from .serializers import (
-    SubscriptionPlanSerializer, SubscriptionSerializer, PaymentMethodSerializer,
-    InvoiceSerializer, BillingAddressSerializer, PromotionalCodeSerializer,
-    StripeSubscriptionCreateSerializer
+    SubscriptionPlanSerializer, SubscriptionSerializer, 
+    PaymentMethodSerializer, InvoiceSerializer, PaymentSerializer,
+    BillingAddressSerializer, PromotionalCodeSerializer,
+    PaymentMethodSetDefaultSerializer, InvoiceDownloadSerializer,
+    PromotionalCodeValidateSerializer
 )
 
 User = get_user_model()
@@ -405,6 +407,7 @@ class PaymentMethodSetDefaultView(generics.GenericAPIView):
     """Set a payment method as default"""
     
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PaymentMethodSetDefaultSerializer
     
     def post(self, request, pk):
         try:
@@ -495,6 +498,7 @@ class InvoiceDownloadView(generics.GenericAPIView):
     """Download invoice PDF"""
     
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = InvoiceDownloadSerializer
     
     def get(self, request, invoice_id):
         try:
@@ -540,6 +544,7 @@ class PromotionalCodeValidateView(generics.GenericAPIView):
     """Validate a promotional code"""
     
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PromotionalCodeValidateSerializer
     
     def post(self, request):
         code = request.data.get('code', '').strip().upper()

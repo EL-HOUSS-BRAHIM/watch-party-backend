@@ -54,7 +54,52 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             # TODO: Implement promo code handling
             pass
             
-        return user
+        return data
+
+
+# Additional serializers for views that need explicit serializer_class
+
+class TwoFactorSetupRequestSerializer(serializers.Serializer):
+    """Serializer for 2FA setup requests"""
+    pass  # No input needed for setup
+
+class TwoFactorVerifyRequestSerializer(serializers.Serializer):
+    """Serializer for 2FA verification"""
+    token = serializers.CharField(max_length=6, min_length=6)
+
+class TwoFactorDisableRequestSerializer(serializers.Serializer):
+    """Serializer for 2FA disable requests"""
+    token = serializers.CharField(max_length=6, min_length=6)
+    password = serializers.CharField(write_only=True)
+
+class GoogleDriveAuthRequestSerializer(serializers.Serializer):
+    """Serializer for Google Drive auth requests"""
+    code = serializers.CharField(required=False)
+    state = serializers.CharField(required=False)
+
+class GoogleDriveDisconnectSerializer(serializers.Serializer):
+    """Serializer for Google Drive disconnect"""
+    pass
+
+class GoogleDriveStatusSerializer(serializers.Serializer):
+    """Serializer for Google Drive status"""
+    pass
+
+class UserSessionsRequestSerializer(serializers.Serializer):
+    """Serializer for user sessions requests"""
+    pass
+
+class SocialAuthRedirectSerializer(serializers.Serializer):
+    """Serializer for social auth redirect"""
+    pass
+
+class GoogleAuthRequestSerializer(serializers.Serializer):
+    """Serializer for Google OAuth requests"""
+    access_token = serializers.CharField()
+
+class GitHubAuthRequestSerializer(serializers.Serializer):
+    """Serializer for GitHub OAuth requests"""
+    access_token = serializers.CharField()
     
     def create_email_verification_token(self, user):
         """Create email verification token"""

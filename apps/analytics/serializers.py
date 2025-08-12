@@ -310,4 +310,45 @@ class GrowthForecastSerializer(serializers.Serializer):
     forecast_period = serializers.CharField()
 
 
-# Add to the end of the existing file
+# Additional serializers for view parameter validation
+
+class PlatformOverviewSerializer(serializers.Serializer):
+    """Serializer for platform overview analytics"""
+    days = serializers.IntegerField(required=False, default=30, min_value=1, max_value=365)
+
+class UserBehaviorRequestSerializer(serializers.Serializer):
+    """Serializer for user behavior analytics"""
+    days = serializers.IntegerField(required=False, default=30, min_value=1, max_value=365)
+
+class ContentPerformanceRequestSerializer(serializers.Serializer):
+    """Serializer for content performance analytics"""
+    days = serializers.IntegerField(required=False, default=30, min_value=1, max_value=365)
+
+class RevenueAnalyticsRequestSerializer(serializers.Serializer):
+    """Serializer for revenue analytics"""
+    days = serializers.IntegerField(required=False, default=30, min_value=1, max_value=365)
+
+class UserPersonalAnalyticsRequestSerializer(serializers.Serializer):
+    """Serializer for user personal analytics"""
+    days = serializers.IntegerField(required=False, default=30, min_value=1, max_value=365)
+
+class RealTimeAnalyticsRequestSerializer(serializers.Serializer):
+    """Serializer for real-time analytics - no input parameters needed"""
+    pass
+
+class VideoDetailedAnalyticsRequestSerializer(serializers.Serializer):
+    """Serializer for video detailed analytics"""
+    pass  # Uses video_id from URL
+
+class UserBehaviorDetailedRequestSerializer(serializers.Serializer):
+    """Serializer for detailed user behavior"""
+    days = serializers.IntegerField(required=False, default=30, min_value=1, max_value=365)
+
+class PredictiveAnalyticsRequestSerializer(serializers.Serializer):
+    """Serializer for predictive analytics"""
+    forecast_days = serializers.IntegerField(required=False, default=7, min_value=1, max_value=30)
+
+class ComparativeAnalyticsRequestSerializer(serializers.Serializer):
+    """Serializer for comparative analytics"""
+    current_days = serializers.IntegerField(required=False, default=7, min_value=1, max_value=365)
+    compare_days = serializers.IntegerField(required=False, default=7, min_value=1, max_value=365)

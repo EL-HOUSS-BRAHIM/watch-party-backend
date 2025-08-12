@@ -29,7 +29,17 @@ from .serializers import (
     PasswordChangeSerializer,
     PasswordResetRequestSerializer,
     PasswordResetSerializer,
-    EmailVerificationSerializer
+    EmailVerificationSerializer,
+    TwoFactorSetupRequestSerializer,
+    TwoFactorVerifyRequestSerializer,
+    TwoFactorDisableRequestSerializer,
+    GoogleDriveAuthRequestSerializer,
+    GoogleDriveDisconnectSerializer,
+    GoogleDriveStatusSerializer,
+    UserSessionsRequestSerializer,
+    SocialAuthRedirectSerializer,
+    GoogleAuthRequestSerializer,
+    GitHubAuthRequestSerializer
 )
 from core.mixins import RateLimitMixin
 
@@ -311,6 +321,7 @@ class GoogleDriveAuthView(APIView):
     """Google Drive OAuth2 authorization endpoint"""
     
     permission_classes = [IsAuthenticated]
+    serializer_class = GoogleDriveAuthRequestSerializer
     
     def get(self, request):
         """Get Google OAuth2 authorization URL"""
@@ -453,6 +464,7 @@ class GoogleDriveDisconnectView(APIView):
     """Disconnect Google Drive"""
     
     permission_classes = [IsAuthenticated]
+    serializer_class = GoogleDriveDisconnectSerializer
     
     def post(self, request):
         """Disconnect user's Google Drive"""
@@ -483,6 +495,7 @@ class GoogleDriveStatusView(APIView):
     """Check Google Drive connection status"""
     
     permission_classes = [IsAuthenticated]
+    serializer_class = GoogleDriveStatusSerializer
     
     def get(self, request):
         """Get Google Drive connection status"""
@@ -513,6 +526,7 @@ class TwoFactorSetupView(APIView):
     """Setup Two-Factor Authentication"""
     
     permission_classes = [IsAuthenticated]
+    serializer_class = TwoFactorSetupRequestSerializer
     
     def post(self, request):
         """Generate 2FA secret and QR code"""
@@ -564,6 +578,7 @@ class TwoFactorVerifyView(APIView):
     """Verify Two-Factor Authentication setup"""
     
     permission_classes = [IsAuthenticated]
+    serializer_class = TwoFactorVerifyRequestSerializer
     
     def post(self, request):
         """Verify 2FA token to enable 2FA"""
@@ -606,6 +621,7 @@ class TwoFactorDisableView(APIView):
     """Disable Two-Factor Authentication"""
     
     permission_classes = [IsAuthenticated]
+    serializer_class = TwoFactorDisableRequestSerializer
     
     def post(self, request):
         """Disable 2FA with token verification"""
@@ -659,6 +675,7 @@ class UserSessionsView(APIView):
     """List and manage user sessions"""
     
     permission_classes = [IsAuthenticated]
+    serializer_class = UserSessionsRequestSerializer
     
     def get(self, request):
         """List active sessions for user"""
@@ -723,6 +740,7 @@ class GoogleAuthView(RateLimitMixin, APIView):
     
     permission_classes = [AllowAny]
     rate_limit_key = 'social_auth'
+    serializer_class = GoogleAuthRequestSerializer
     
     def post(self, request):
         """Authenticate user with Google OAuth token"""
@@ -822,6 +840,7 @@ class GitHubAuthView(RateLimitMixin, APIView):
     
     permission_classes = [AllowAny]
     rate_limit_key = 'social_auth'
+    serializer_class = GitHubAuthRequestSerializer
     
     def post(self, request):
         """Authenticate user with GitHub OAuth token"""
@@ -955,6 +974,7 @@ class SocialAuthRedirectView(APIView):
     Frontend expects: GET /api/auth/social/google/ (redirect to OAuth provider)
     """
     permission_classes = [AllowAny]
+    serializer_class = SocialAuthRedirectSerializer
     
     def get(self, request, provider):
         """Generate OAuth redirect URL for social providers"""

@@ -376,3 +376,22 @@ class CouponSerializer(serializers.Serializer):
     duration_in_months = serializers.IntegerField(required=False)
     max_redemptions = serializers.IntegerField(required=False)
     redeem_by = serializers.DateTimeField(required=False)
+
+
+# Additional serializers for views that need explicit serializer_class
+
+class PaymentMethodSetDefaultSerializer(serializers.Serializer):
+    """Serializer for setting payment method as default"""
+    pass  # No input data needed, uses URL parameter
+
+class InvoiceDownloadSerializer(serializers.Serializer):
+    """Serializer for invoice download"""
+    pass  # No input data needed, uses URL parameter
+
+class PromotionalCodeValidateSerializer(serializers.Serializer):
+    """Serializer for promotional code validation"""
+    code = serializers.CharField(max_length=50)
+    plan_id = serializers.UUIDField(required=False)
+    
+    def validate_code(self, value):
+        return value.strip().upper()

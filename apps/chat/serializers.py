@@ -228,3 +228,24 @@ class UserJoinLeaveSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=['join', 'leave'])
     timestamp = serializers.DateTimeField()
     user_count = serializers.IntegerField()
+
+
+# Additional serializers for views that need explicit serializer_class
+
+class ModerateChatSerializer(serializers.Serializer):
+    """Serializer for chat moderation actions"""
+    action = serializers.ChoiceField(choices=['delete_message', 'ban_user', 'mute_user', 'slow_mode'])
+    message_id = serializers.UUIDField(required=False)
+    user_id = serializers.UUIDField(required=False)
+    duration_minutes = serializers.IntegerField(required=False, min_value=1, max_value=10080)  # Max 1 week
+    reason = serializers.CharField(max_length=500, required=False)
+    slow_mode_seconds = serializers.IntegerField(required=False, min_value=0, max_value=3600)
+
+class UnbanUserSerializer(serializers.Serializer):
+    """Serializer for unbanning users"""
+    user_id = serializers.UUIDField()
+    reason = serializers.CharField(max_length=500, required=False)
+
+class ChatStatsRequestSerializer(serializers.Serializer):
+    """Serializer for chat statistics requests"""
+    days = serializers.IntegerField(required=False, default=7, min_value=1, max_value=365)
