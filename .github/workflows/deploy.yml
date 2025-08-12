@@ -278,8 +278,14 @@ jobs:
             sudo -u $SERVICE_USER -H python3 -m venv venv || { echo "Failed to create venv"; exit 1; }
           fi
           sudo chown -R $SERVICE_USER:$SERVICE_GROUP venv || true
-          # Verify site-packages writable (fixed: removed invalid heredoc-in-bash -c usage)
-          sudo -u $SERVICE_USER -H python3 -c "import sys, os; sp=[p for p in sys.path if p.endswith('site-packages')]; sp=sp[0] if sp else ''; print('Site-packages:', sp); raise SystemExit(0 if (sp and os.access(sp, os.W_OK)) else 1)" || { echo "site-packages not writable for $SERVICE_USER"; ls -ld venv/lib/python*/site-packages || true; exit 1; }
+          sudo chmod -R u+w venv || true
+          # Verify site-packages writable; attempt auto-fix once if not
+          if ! sudo -u $SERVICE_USER -H python3 -c "import sys,os,pathlib; sp=[p for p in sys.path if p.endswith('site-packages')]; sp=sp[0] if sp else ''; print('Site-packages:', sp); (pathlib.Path(sp)/'__perm_test__').write_text('ok') if sp else None"; then
+            echo "Attempting permission repair on venv..."
+            sudo chown -R $SERVICE_USER:$SERVICE_GROUP venv || true
+            sudo chmod -R u+rwX venv || true
+            sudo -u $SERVICE_USER -H python3 -c "import sys,os,pathlib; sp=[p for p in sys.path if p.endswith('site-packages')]; sp=sp[0] if sp else ''; print('Recheck Site-packages:', sp); (pathlib.Path(sp)/'__perm_test__').write_text('ok') if sp else None" || { echo "site-packages still not writable for $SERVICE_USER"; ls -ld venv/lib/python*/site-packages || true; exit 1; }
+          fi
 
           echo "📦 Installing Python dependencies as $SERVICE_USER"
           sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -m ensurepip --upgrade || true && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt && pip install gunicorn gevent'
