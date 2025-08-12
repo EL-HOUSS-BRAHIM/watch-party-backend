@@ -18,8 +18,10 @@ class EnhancedAutoSchema(AutoSchema):
         operation_id = super().get_operation_id()
         
         # Add version prefix if available
-        if hasattr(self.target, 'versioning_class'):
-            version = getattr(self.request, 'version', 'v2')
+        # Use self.view instead of self.target (compatibility fix for drf-spectacular 0.28+)
+        view = getattr(self, 'view', None)
+        if view and hasattr(view, 'versioning_class'):
+            version = getattr(getattr(self, 'request', None), 'version', 'v2')
             operation_id = f"{version}_{operation_id}"
         
         return operation_id
@@ -29,13 +31,15 @@ class EnhancedAutoSchema(AutoSchema):
         tags = super().get_tags()
         
         # Add additional tags based on view properties
-        if hasattr(self.target, 'queryset') and self.target.queryset is not None:
-            model_name = self.target.queryset.model._meta.verbose_name
+        # Use self.view instead of self.target (compatibility fix for drf-spectacular 0.28+)
+        view = getattr(self, 'view', None)
+        if view and hasattr(view, 'queryset') and view.queryset is not None:
+            model_name = view.queryset.model._meta.verbose_name
             tags.append(model_name.title())
         
         # Add permission-based tags
-        if hasattr(self.target, 'permission_classes'):
-            for permission_class in self.target.permission_classes:
+        if view and hasattr(view, 'permission_classes'):
+            for permission_class in view.permission_classes:
                 if 'Admin' in permission_class.__name__:
                     tags.append('Admin Only')
                 elif 'Premium' in permission_class.__name__:
@@ -48,26 +52,28 @@ class EnhancedAutoSchema(AutoSchema):
         operation = super().get_operation(path, path_regex, path_prefix, method, registry)
         
         # Add rate limiting information
-        if hasattr(self.target, 'throttle_classes') and self.target.throttle_classes:
+        # Use self.view instead of self.target (compatibility fix for drf-spectacular 0.28+)
+        view = getattr(self, 'view', None)
+        if view and hasattr(view, 'throttle_classes') and view.throttle_classes:
             operation['x-rate-limit'] = {
                 'description': 'This endpoint is rate limited',
-                'classes': [cls.__name__ for cls in self.target.throttle_classes]
+                'classes': [cls.__name__ for cls in view.throttle_classes]
             }
         
         # Add caching information
-        if hasattr(self.target, 'cache_timeout'):
+        if view and hasattr(view, 'cache_timeout'):
             operation['x-cache'] = {
-                'timeout': self.target.cache_timeout,
+                'timeout': view.cache_timeout,
                 'description': 'Response is cached'
             }
         
         # Add authentication requirements
-        if hasattr(self.target, 'authentication_classes'):
-            auth_types = [cls.__name__ for cls in self.target.authentication_classes]
+        if view and hasattr(view, 'authentication_classes'):
+            auth_types = [cls.__name__ for cls in view.authentication_classes]
             operation['x-authentication'] = {
                 'types': auth_types,
                 'required': not any('AllowAny' in perm.__name__ 
-                                  for perm in getattr(self.target, 'permission_classes', []))
+                                  for perm in getattr(view, 'permission_classes', []))
             }
         
         return operation
