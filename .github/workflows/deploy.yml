@@ -273,18 +273,28 @@ jobs:
 
           # Handle environment file - CRITICAL for service startup
           echo "🔧 Setting up environment file..."
+          ENV_FILE=""
           if [[ -f ./.env.generated ]]; then
-            echo "Found .env.generated, placing as $DEPLOY_DIR/.env"
-            sudo cp ./.env.generated "$DEPLOY_DIR/.env"
-            sudo chmod 600 "$DEPLOY_DIR/.env"
-            sudo chown $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR/.env"
-            echo "✅ Environment file placed successfully"
+            echo "Found .env.generated, using it"
+            ENV_FILE="./.env.generated"
+          elif [[ -f ./.env.production ]]; then
+            echo "Found .env.production, using it as fallback"  
+            ENV_FILE="./.env.production"
+          elif [[ -f ./.env.example ]]; then
+            echo "Found .env.example, using it as last resort"
+            ENV_FILE="./.env.example"
           else
-            echo "❌ .env.generated not found - this is a critical error"
+            echo "❌ No environment file found - this is a critical error"
             echo "Available files in current directory:"
             ls -la || true
             exit 1
           fi
+          
+          echo "Using environment file: $ENV_FILE"
+          sudo cp "$ENV_FILE" "$DEPLOY_DIR/.env"
+          sudo chmod 600 "$DEPLOY_DIR/.env"
+          sudo chown $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR/.env"
+          echo "✅ Environment file placed successfully from $ENV_FILE"
 
           cd "$DEPLOY_DIR"
           echo "🔧 Ensuring clean & writable virtual environment"
@@ -538,7 +548,14 @@ jobs:
           echo "📤 Uploading deployment files..."
           echo "Files being uploaded:"
           ls -la deployment-package/
+          echo "Checking for .env.generated specifically:"
+          ls -la deployment-package/.env.generated || echo ".env.generated not found in deployment-package"
           scp -o StrictHostKeyChecking=no -r deployment-package/* $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
+          # Ensure .env.generated is uploaded separately if it exists
+          if [[ -f deployment-package/.env.generated ]]; then
+            echo "📤 Explicitly uploading .env.generated..."
+            scp -o StrictHostKeyChecking=no deployment-package/.env.generated $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
+          fi
           scp -o StrictHostKeyChecking=no ci_remote_deploy.sh $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
           
           # Execute deployment with timeout
@@ -547,12 +564,17 @@ jobs:
             cd /tmp/watchparty-deploy
             echo '📋 Files received on server:'
             ls -la
-            echo '📋 Checking for .env.generated:'
+            echo '📋 Checking for environment files:'
+            echo 'Looking for .env.generated:'
             if [[ -f .env.generated ]]; then
               echo '✅ .env.generated found with $(wc -l < .env.generated) lines'
+              echo 'First few lines (sanitized):'
+              head -3 .env.generated | sed 's/=.*/=***/' || true
             else
               echo '❌ .env.generated not found!'
             fi
+            echo 'Looking for other env files:'
+            ls -la .env* 2>/dev/null || echo 'No .env* files found'
             timeout 1200 bash -x ./ci_remote_deploy.sh
           " || {
             echo "❌ Deployment script failed or timed out"

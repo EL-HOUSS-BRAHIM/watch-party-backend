@@ -146,9 +146,8 @@ LOGGING = {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
-        'json': {
-            'class': 'pythonjsonlogger.jsonlogger.JsonFormatter',
-            'format': '%(asctime)s %(name)s %(levelname)s %(message)s'
+        'detailed': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
         },
     },
     'handlers': {
@@ -164,7 +163,7 @@ LOGGING = {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler', 
             'filename': '/var/log/watchparty/django_errors.log',
-            'formatter': 'json',
+            'formatter': 'detailed',
             'maxBytes': 1024*1024*50,  # 50 MB
             'backupCount': 5,
         },
