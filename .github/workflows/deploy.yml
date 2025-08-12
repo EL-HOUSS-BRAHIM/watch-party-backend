@@ -106,7 +106,16 @@ jobs:
       - name: Generate checksums
         if: steps.check_deployment.outputs.ready == 'true'
         run: |
-          (cd deployment-package && find . -type f -maxdepth 5 -print0 | sort -z | xargs -0 sha256sum) > deployment-package/CHECKSUMS.sha256 || true
+          # Recreate checksum file deterministically; exclude itself & CI/meta files
+          (cd deployment-package && \
+            rm -f CHECKSUMS.sha256 && \
+            find . -type f -maxdepth 8 \
+              ! -name 'CHECKSUMS.sha256' \
+              ! -path './.github/*' \
+              ! -path './logs/*' \
+              ! -path './**/__pycache__/*' \
+              ! -name '*.pyc' \
+              -print0 | sort -z | xargs -0 sha256sum > CHECKSUMS.sha256)
       - name: Upload deployment package
         if: steps.check_deployment.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
@@ -136,21 +145,22 @@ jobs:
             echo "No checksum file present, skipping verification"
             exit 0
           fi
+          # Filter out any entries whose files are absent (e.g., intentionally excluded on deploy)
           TMP_FILE=$(mktemp)
-          # Reconstruct checksum list only for files that still exist
           while read -r hash path; do
-            # Expect lines like: <hash><space><space>./relative
-            if [[ -f ${path#./} || -f $path ]]; then
-              echo "$hash  $path" >> "$TMP_FILE"
+            # path comes like: <hash><space><space>./relative
+            file=${path#./}
+            if [[ -f "$file" ]]; then
+              printf '%s  %s\n' "$hash" "$path" >> "$TMP_FILE"
             else
               echo "Skipping missing $path"
             fi
           done < CHECKSUMS.sha256
-          if [[ -s "$TMP_FILE" ]]; then
-            sha256sum -c "$TMP_FILE" || { echo "Checksum mismatch(s) detected"; exit 1; }
-          else
-            echo "No existing files to verify; skipping"
+          if [[ ! -s "$TMP_FILE" ]]; then
+            echo "No files left to verify; skipping"
+            exit 0
           fi
+          sha256sum -c "$TMP_FILE" || { echo "Checksum mismatch(s) detected"; exit 1; }
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
