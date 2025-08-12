@@ -156,3 +156,4 @@ dump.rdb
 # Backup files
 *.bak
 *.tmp
+.ssh/*
