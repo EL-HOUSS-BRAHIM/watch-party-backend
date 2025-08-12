@@ -270,6 +270,8 @@ check_missing_deployment_secrets() {
         log_success "All required deployment secrets are present!"
     fi
 }
+
+set_deployment_secrets() {
     log_info "Setting deployment-specific secrets..."
     
     for secret_name in "${!DEPLOYMENT_SECRETS[@]}"; do
