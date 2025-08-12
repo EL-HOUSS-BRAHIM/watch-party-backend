@@ -475,16 +475,5 @@ main() {
             ;;
     esac
 }
-            if [[ ! "$1" =~ ^-- ]]; then
-                set_secrets_with_gh "$1"
-            else
-                log_error "Unknown option: $1"
-                echo
-                show_help
-                exit 1
-            fi
-            ;;
-    esac
-}
 
 main "$@"

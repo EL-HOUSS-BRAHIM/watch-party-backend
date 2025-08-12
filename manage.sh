@@ -110,7 +110,7 @@ execute_script() {
 
 # Check if we're in the right directory
 check_project_root() {
-    if [[ ! -f "manage.py" ]] || [[ ! -d "apps" ]] || [[ ! -d "watchparty" ]]; then
+    if [[ ! -f "manage.py" ]] || [[ ! -d "apps" ]] || [[ ! -d "core" ]] || [[ ! -d "scripts" ]]; then
         log_error "This doesn't appear to be the Watch Party Backend project root"
         log_error "Please run this script from the project root directory"
         exit 1
