@@ -127,6 +127,120 @@ jobs:
           set -e
           DEPLOY_DIR="${DEPLOY_DIR:-/var/www/watch-party-backend}"
           SERVICE_USER="${SERVER_USER:-www-data}"
+          
+          echo "🔧 Setting up server environment..."
+          
+          # Update system packages
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            INSTALLER="apt-get install -y"
+          elif command -v yum >/dev/null 2>&1; then
+            sudo yum update -y -q
+            INSTALLER="yum install -y"
+          elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf update -y -q
+            INSTALLER="dnf install -y"
+          else
+            echo "❌ Unsupported package manager"
+            exit 1
+          fi
+          
+          # Install essential packages
+          echo "📦 Installing essential packages..."
+          if ! command -v python3 >/dev/null 2>&1; then
+            echo "Installing Python 3..."
+            sudo $INSTALLER python3 python3-pip python3-venv python3-dev
+          fi
+          
+          if ! command -v nginx >/dev/null 2>&1; then
+            echo "Installing Nginx..."
+            sudo $INSTALLER nginx
+          fi
+          
+          if ! command -v curl >/dev/null 2>&1; then
+            echo "Installing curl..."
+            sudo $INSTALLER curl
+          fi
+          
+          if ! command -v git >/dev/null 2>&1; then
+            echo "Installing git..."
+            sudo $INSTALLER git
+          fi
+          
+          if ! command -v rsync >/dev/null 2>&1; then
+            echo "Installing rsync..."
+            sudo $INSTALLER rsync
+          fi
+          
+          # Install build essentials for Python packages
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo $INSTALLER build-essential libpq-dev
+          elif command -v yum >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then
+            sudo $INSTALLER gcc gcc-c++ make postgresql-devel
+          fi
+          
+          # Create service user if it doesn't exist
+          if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+            echo "Creating service user: $SERVICE_USER"
+            sudo useradd -r -s /bin/false -d /var/www -c "Web Server User" $SERVICE_USER || true
+          fi
+          
+          # Set up directory structure
+          echo "📁 Setting up directory structure..."
+          sudo mkdir -p "$DEPLOY_DIR"
+          sudo mkdir -p /var/log/watchparty
+          sudo chown -R $SERVICE_USER:www-data "$DEPLOY_DIR" || sudo chown -R $SERVICE_USER:$SERVICE_USER "$DEPLOY_DIR"
+          sudo chown -R $SERVICE_USER:www-data /var/log/watchparty || sudo chown -R $SERVICE_USER:$SERVICE_USER /var/log/watchparty
+          
+          # Configure Nginx if not already configured
+          if [[ ! -f /etc/nginx/sites-available/watchparty ]]; then
+            echo "⚙️ Configuring Nginx..."
+            sudo tee /etc/nginx/sites-available/watchparty > /dev/null << 'NGINXCONF'
+          server {
+              listen 80;
+              server_name _;
+              
+              client_max_body_size 100M;
+              
+              location /static/ {
+                  alias /var/www/watch-party-backend/staticfiles/;
+                  expires 30d;
+                  add_header Cache-Control "public, immutable";
+              }
+              
+              location /media/ {
+                  alias /var/www/watch-party-backend/media/;
+                  expires 30d;
+                  add_header Cache-Control "public, immutable";
+              }
+              
+              location / {
+                  proxy_pass http://127.0.0.1:8000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+              }
+          }
+          NGINXCONF
+            
+            # Enable the site
+            sudo ln -sf /etc/nginx/sites-available/watchparty /etc/nginx/sites-enabled/ || true
+            sudo rm -f /etc/nginx/sites-enabled/default || true
+            
+            # Test and reload nginx
+            sudo nginx -t && sudo systemctl reload nginx || echo "Nginx configuration needs manual review"
+          fi
+          
+          # Start and enable nginx
+          sudo systemctl enable nginx || true
+          sudo systemctl start nginx || true
+          
+          echo "✅ Server setup completed"
+          
           mkdir -p "$DEPLOY_DIR"
           cd /tmp/watchparty-deploy
           rsync -av --exclude='venv' --exclude='.env' ./ "$DEPLOY_DIR/"
@@ -143,27 +257,70 @@ jobs:
           python manage.py migrate --noinput || true
           python manage.py collectstatic --noinput || true
           if [[ ! -f /etc/systemd/system/watchparty-gunicorn.service ]]; then
+            echo "⚙️ Creating systemd service..."
             cat > /tmp/watchparty-gunicorn.service << EOF
           [Unit]
-          Description=Watch Party Gunicorn
+          Description=Watch Party Gunicorn Application Server
           After=network.target
+          
           [Service]
           Type=notify
           User=$SERVICE_USER
           Group=www-data
           WorkingDirectory=$DEPLOY_DIR
           EnvironmentFile=$DEPLOY_DIR/.env
-          ExecStart=$DEPLOY_DIR/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 --worker-class gevent watchparty.wsgi:application
+          ExecStart=$DEPLOY_DIR/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 --worker-class gevent --access-logfile /var/log/watchparty/access.log --error-logfile /var/log/watchparty/error.log watchparty.wsgi:application
+          ExecReload=/bin/kill -s HUP \$MAINPID
           Restart=on-failure
+          RestartSec=5
+          KillMode=mixed
+          TimeoutStopSec=5
+          PrivateTmp=true
+          
           [Install]
           WantedBy=multi-user.target
           EOF
             sudo mv /tmp/watchparty-gunicorn.service /etc/systemd/system/watchparty-gunicorn.service
             sudo systemctl daemon-reload
+            sudo systemctl enable watchparty-gunicorn
+          fi
+          
+          # Configure basic firewall if ufw is available
+          if command -v ufw >/dev/null 2>&1; then
+            echo "🔥 Configuring firewall..."
+            sudo ufw --force enable || true
+            sudo ufw allow ssh || true
+            sudo ufw allow 'Nginx Full' || true
+            sudo ufw allow 80 || true
+            sudo ufw allow 443 || true
           fi
           sudo systemctl restart watchparty-gunicorn || sudo systemctl start watchparty-gunicorn
           sleep 5
-          curl -f http://127.0.0.1:8000/health/ >/dev/null 2>&1 && echo "Health OK" || echo "Health endpoint failed"
+          
+          echo "🏥 Running health checks..."
+          # Check if gunicorn is running
+          if sudo systemctl is-active --quiet watchparty-gunicorn; then
+            echo "✅ Gunicorn service is running"
+          else
+            echo "❌ Gunicorn service failed to start"
+            sudo systemctl status watchparty-gunicorn --no-pager -l || true
+          fi
+          
+          # Check if nginx is running
+          if sudo systemctl is-active --quiet nginx; then
+            echo "✅ Nginx service is running"
+          else
+            echo "❌ Nginx service is not running"
+            sudo systemctl status nginx --no-pager -l || true
+          fi
+          
+          # Test application health
+          curl -f http://127.0.0.1:8000/health/ >/dev/null 2>&1 && echo "✅ Application health check passed" || echo "⚠️ Application health check failed"
+          
+          # Test nginx proxy
+          curl -f http://127.0.0.1/health/ >/dev/null 2>&1 && echo "✅ Nginx proxy health check passed" || echo "⚠️ Nginx proxy health check failed"
+          
+          echo "🚀 Deployment completed!"
           SCRIPT
           chmod +x ci_remote_deploy.sh
       - name: Deploy to server
