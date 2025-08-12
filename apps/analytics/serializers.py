@@ -43,7 +43,7 @@ class PartyAnalyticsSerializer(serializers.ModelSerializer):
             'total_messages', 'total_reactions',
             'sync_issues', 'buffering_events',
             'created_at', 'updated_at',
-            'engagement_score'
+            'engagement_score', 'average_session_duration'
         ]
         read_only_fields = ['id', 'party', 'created_at', 'updated_at']
 
