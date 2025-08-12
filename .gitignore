@@ -104,6 +104,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Secrets documentation with real values
+docs/deployment/GITHUB_ACTIONS_SECRETS_SETUP_REAL.md
+
 # Spyder project settings
 .spyderproject
 .spyproject

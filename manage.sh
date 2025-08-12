@@ -6,7 +6,7 @@
 # This is the main entry point for all project management operations
 # Author: Watch Party Team
 # Version: 2.0
-# Last Updated: August 11, 2025
+# Last Updated: August 12, 2025
 
 set -e
 
@@ -175,7 +175,7 @@ show_help() {
     echo -e "  ${MAGENTA}ssl-setup${NC}             Setup SSL certificates"
     echo
     echo -e "${WHITE}PRODUCTION MANAGEMENT:${NC}"
-    echo -e "  ${CYAN}prod-setup${NC}             Complete production server setup"
+    echo -e "  ${CYAN}prod-setup${NC}             Complete production server setup (uses unified .env or .env.production)"
     echo -e "  ${CYAN}prod-start${NC}             Start production services"
     echo -e "  ${CYAN}prod-stop${NC}              Stop production services"
     echo -e "  ${CYAN}prod-restart${NC}           Restart production services"
@@ -242,7 +242,7 @@ show_version() {
     echo "  • Management Script: 2.0"
     echo "  • Project: Watch Party Backend"
     echo "  • Author: Watch Party Team"
-    echo "  • Last Updated: August 11, 2025"
+    echo "  • Last Updated: August 12, 2025"
     echo
 }
 
@@ -411,17 +411,9 @@ cmd_clean_nginx() {
     execute_script "$SCRIPTS_DIR/production.sh" "clean-nginx" "$@"
 }
 
-# Environment validation commands
-cmd_validate_env() {
-    execute_script "$SCRIPTS_DIR/env-validator.sh" "validate" "$@"
-}
-
+# Environment validation commands (aliases)
 cmd_fix_env() {
     execute_script "$SCRIPTS_DIR/env-validator.sh" "fix" "$@"
-}
-
-cmd_setup_env() {
-    execute_script "$SCRIPTS_DIR/env-validator.sh" "interactive" "$@"
 }
 
 # Backup and maintenance commands

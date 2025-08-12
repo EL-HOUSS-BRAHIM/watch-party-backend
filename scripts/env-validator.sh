@@ -6,7 +6,7 @@
 # Validates and fixes environment configuration issues
 # Author: Watch Party Team
 # Version: 1.0
-# Last Updated: August 11, 2025
+# Last Updated: August 12, 2025 (added unified .env support & secrets fetch)
 
 set -e
 
@@ -17,7 +17,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Colors and emojis
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
+readonly YIGHLIGHT='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m'
 readonly CHECK="✅"
@@ -29,13 +29,14 @@ readonly FIX="🔧"
 # Logging functions
 log_info() { echo -e "${BLUE}${INFO} $1${NC}"; }
 log_success() { echo -e "${GREEN}${CHECK} $1${NC}"; }
-log_warning() { echo -e "${YELLOW}${WARNING} $1${NC}"; }
+log_warning() { echo -e "${YIGHLIGHT}${WARNING} $1${NC}"; }
 log_error() { echo -e "${RED}${CROSS} $1${NC}"; }
 log_fix() { echo -e "${YELLOW}${FIX} $1${NC}"; }
 
 # Environment files
 DEV_ENV="$PROJECT_ROOT/.env"
 PROD_ENV="$PROJECT_ROOT/.env.production"
+UNIFIED_ENV="$PROJECT_ROOT/.env"  # unified file preference
 LOCAL_ENV="$PROJECT_ROOT/.env.local"
 EXAMPLE_ENV="$PROJECT_ROOT/.env.example"
 
@@ -44,7 +45,12 @@ EXAMPLE_ENV="$PROJECT_ROOT/.env.example"
 # =============================================================================
 
 detect_environment() {
-    if [[ -f "$PROD_ENV" ]] && [[ "${DJANGO_SETTINGS_MODULE:-}" == *"production"* ]]; then
+    # If unified .env exists and explicitly sets production, treat as production
+    if [[ -f "$UNIFIED_ENV" ]] && grep -Eq '^DJANGO_SETTINGS_MODULE=.*production' "$UNIFIED_ENV"; then
+        echo "production"
+        return
+    fi
+    if [[ -f "$PROD_ENV" ]] && grep -Eq '^DJANGO_SETTINGS_MODULE=.*production' "$PROD_ENV"; then
         echo "production"
     elif [[ -f "$LOCAL_ENV" ]]; then
         echo "local"
@@ -57,20 +63,23 @@ detect_environment() {
 
 get_env_file() {
     local env_type="${1:-$(detect_environment)}"
-    
     case "$env_type" in
         production)
-            echo "$PROD_ENV"
+            # Prefer unified .env if it contains production settings; otherwise fallback
+            if [[ -f "$UNIFIED_ENV" ]] && grep -Eq '^DJANGO_SETTINGS_MODULE=.*production' "$UNIFIED_ENV"; then
+                echo "$UNIFIED_ENV"
+            elif [[ -f "$PROD_ENV" ]]; then
+                echo "$PROD_ENV"
+            else
+                echo "$UNIFIED_ENV"
+            fi
             ;;
         local)
-            echo "$LOCAL_ENV"
-            ;;
-        development)
-            echo "$DEV_ENV"
-            ;;
+            echo "$LOCAL_ENV" ;;
+        development|dev)
+            echo "$DEV_ENV" ;;
         *)
-            echo "$DEV_ENV"
-            ;;
+            echo "$DEV_ENV" ;;
     esac
 }
 
@@ -628,6 +637,104 @@ show_env_status() {
     fi
 }
 
+# ========================= AWS SECRETS INTEGRATION ==========================
+
+aws_cli_available() { command -v aws >/dev/null 2>&1; }
+
+update_env_file_kv() {
+    local env_file="$1"; local key="$2"; local val="$3"
+    grep -q "^${key}=" "$env_file" 2>/dev/null && \
+        sed -i "s|^${key}=.*|${key}=${val}|" "$env_file" || \
+        echo "${key}=${val}" >> "$env_file"
+}
+
+fetch_secrets_manager() {
+    local secret_id="$1"; local env_file="$2"
+    log_info "Fetching AWS Secrets Manager secret: $secret_id"
+    if ! aws_cli_available; then
+        log_error "aws CLI not installed"
+        return 1
+    fi
+    local secret_json
+    if ! secret_json=$(aws secretsmanager get-secret-value --secret-id "$secret_id" --query SecretString --output text 2>/dev/null); then
+        log_error "Failed to retrieve secret $secret_id"
+        return 1
+    fi
+    # Parse JSON and update env file (ignore nested objects)
+    local tmp_keys
+    tmp_keys=$(python3 - <<PY
+import json, os
+raw = os.environ.get('SECRET_JSON','{}')
+try:
+    data = json.loads(raw)
+except Exception:
+    exit(1)
+for k,v in data.items():
+    if isinstance(v,(str,int,float)):
+        print(f"{k}={v}")
+PY
+    SECRET_JSON="$secret_json" python3 -c "import json,os;d=json.loads(os.environ['SECRET_JSON']);[print(f'{k}={v}') for k,v in d.items() if isinstance(v,(str,int,float))]")
+    # Fallback if tmp_keys empty
+    if [[ -z "$tmp_keys" ]]; then
+        log_warning "No simple key/value pairs found in secret JSON"
+        return 0
+    fi
+    while IFS='=' read -r k v; do
+        [[ -z "$k" ]] && continue
+        update_env_file_kv "$env_file" "$k" "$v"
+        echo "  • Updated $k"
+    done <<< "$tmp_keys"
+    log_success "Secrets applied to $(basename "$env_file")"
+}
+
+fetch_ssm_parameters() {
+    local param_path="$1"; local env_file="$2"
+    log_info "Fetching SSM parameters under: $param_path"
+    if ! aws_cli_available; then
+        log_error "aws CLI not installed"
+        return 1
+    fi
+    local params
+    if ! params=$(aws ssm get-parameters-by-path --with-decryption --path "$param_path" --query 'Parameters[].{Name:Name,Value:Value}' --output json 2>/dev/null); then
+        log_error "Failed to retrieve SSM parameters"
+        return 1
+    fi
+    python3 - <<PY | while IFS='=' read -r k v; do [[ -z "$k" ]] && continue; update_env_file_kv "$env_file" "$k" "$v"; echo "  • Updated $k"; done
+import json, os
+j=json.loads('''$params''')
+for p in j:
+    name=p['Name'].split('/')[-1]
+    if name:
+        print(f"{name}={p['Value']}")
+PY
+    log_success "SSM parameters applied to $(basename "$env_file")"
+}
+
+cmd_fetch_secrets() {
+    local env_type="${1:-production}"; shift || true
+    local env_file; env_file=$(get_env_file "$env_type")
+    if [[ ! -f "$env_file" ]]; then
+        log_error "Environment file not found: $env_file"
+        return 1
+    fi
+    local secret_id="${AWS_SECRETS_MANAGER_SECRET_ID:-$1}"
+    local ssm_path="${AWS_SSM_PARAM_PATH:-}"  # optional
+    if [[ -n "$secret_id" ]]; then
+        fetch_secrets_manager "$secret_id" "$env_file"
+    fi
+    if [[ -n "$ssm_path" ]]; then
+        fetch_ssm_parameters "$ssm_path" "$env_file"
+    fi
+    if [[ -z "$secret_id$ssm_path" ]]; then
+        log_warning "No secret ID or SSM path provided. Set AWS_SECRETS_MANAGER_SECRET_ID or AWS_SSM_PARAM_PATH."
+    fi
+    fix_env_permissions "$env_file" || true
+}
+
+# =============================================================================
+# HELP & USAGE
+# =============================================================================
+
 show_help() {
     echo "Watch Party Environment Validator & Fixer"
     echo
@@ -640,6 +747,7 @@ show_help() {
     echo "  interactive [env]      Interactive environment setup"
     echo "  status [env]           Show environment status"
     echo "  create [env]           Create new environment file"
+    echo "  fetch-secrets [env]    Fetch & apply AWS Secrets Manager / SSM params"  
     echo
     echo "ENVIRONMENTS:"
     echo "  development            Development environment (.env)"
@@ -657,9 +765,7 @@ show_help() {
 }
 
 main() {
-    local command="${1:-help}"
-    local env_type="${2:-$(detect_environment)}"
-    
+    local command="${1:-help}"; local env_type="${2:-$(detect_environment)}"
     # Handle short environment names
     case "$env_type" in
         prod) env_type="production" ;;
@@ -683,6 +789,10 @@ main() {
             local env_file
             env_file=$(get_env_file "$env_type")
             create_default_env "$env_file" "$env_type"
+            ;;
+        fetch-secrets|secrets)
+            shift || true
+            cmd_fetch_secrets "$env_type" "$@"
             ;;
         help|--help|-h)
             show_help

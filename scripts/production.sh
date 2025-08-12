@@ -6,13 +6,19 @@
 # Comprehensive production server setup, configuration, and management
 # Author: Watch Party Team
 # Version: 2.0
-# Last Updated: August 11, 2025
+# Last Updated: August 12, 2025
 
 set -e
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Unified production env file detection (prefer legacy .env.production if present)
+PROD_ENV_FILE="$PROJECT_ROOT/.env"
+if [[ -f "$PROJECT_ROOT/.env.production" ]]; then
+    PROD_ENV_FILE="$PROJECT_ROOT/.env.production"  # backward compatibility
+fi
 
 # Colors and emojis
 readonly RED='\033[0;31m'
@@ -248,8 +254,7 @@ stop_conflicting_services() {
 check_env_requirements() {
     log_info "Checking environment requirements..."
     
-    local missing_vars=()
-    local env_file="$PROJECT_ROOT/.env.production"
+    local env_file="$PROD_ENV_FILE"
     
     if [[ ! -f "$env_file" ]]; then
         log_warning "Production environment file not found: $env_file"
@@ -293,9 +298,9 @@ check_env_requirements() {
 }
 
 create_production_env() {
-    log_info "Creating production environment configuration..."
+    log_info "Creating production environment configuration (unified .env)..."
     
-    local env_file="$PROJECT_ROOT/.env.production"
+    local env_file="$PROD_ENV_FILE"
     local server_ip
     server_ip=$(get_server_ip)
     
@@ -305,105 +310,102 @@ create_production_env() {
     
     cat > "$env_file" << EOF
 # =============================================================================
-# WATCH PARTY BACKEND - PRODUCTION ENVIRONMENT CONFIGURATION
+# WATCH PARTY BACKEND - PRODUCTION ENVIRONMENT CONFIGURATION (Unified .env)
 # =============================================================================
 # Generated on: $(date)
 # Server IP: $server_ip
+# NOTE: Prefer managing real secrets via AWS SSM / Secrets Manager and templating this file.
 
-# Django Settings
+# Core Django
 DEBUG=False
 SECRET_KEY=$secret_key
 DJANGO_SETTINGS_MODULE=watchparty.settings.production
 ALLOWED_HOSTS=$server_ip,localhost,127.0.0.1
+CSRF_TRUSTED_ORIGINS=http://$server_ip,https://$server_ip
 
-# Database Configuration
-DATABASE_URL=postgresql://watchparty_user:watchparty_secure_password@localhost:5432/watchparty
+# Database (Override with AWS RDS secret)
+DATABASE_URL=postgresql://watchparty_admin:CHANGE_ME@db-host:5432/watchparty_prod?sslmode=require
+DATABASE_NAME=watchparty_prod
+DATABASE_USER=watchparty_admin
+DATABASE_PASSWORD=CHANGE_ME
+DATABASE_HOST=db-host
+DATABASE_PORT=5432
+DB_SSL_MODE=require
 
-# Redis Configuration
+# Redis / Valkey
 REDIS_URL=redis://localhost:6379/0
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/2
+CELERY_RESULT_BACKEND=redis://localhost:6379/3
+CHANNEL_LAYERS_CONFIG_HOSTS=redis://localhost:6379/4
 
-# Server Configuration
-HTTP_PORT=$DEFAULT_HTTP_PORT
-WEBSOCKET_PORT=$DEFAULT_WEBSOCKET_PORT
-WORKERS=3
-WORKER_CLASS=gevent
-MAX_REQUESTS=1000
-TIMEOUT=30
+# Email (override in secret store)
+EMAIL_HOST=localhost
+EMAIL_PORT=25
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=
+DEFAULT_FROM_EMAIL=noreply@example.com
 
-# Security Settings
-SECURE_SSL_REDIRECT=False
-SESSION_COOKIE_SECURE=False
-CSRF_COOKIE_SECURE=False
+# Static & Media
+MEDIA_URL=/media/
+STATIC_URL=/static/
+MEDIA_ROOT=/var/www/watchparty/media/
+STATIC_ROOT=/var/www/watchparty/static/
+
+# Security
+SECURE_SSL_REDIRECT=True
+SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SECURE=True
 SECURE_BROWSER_XSS_FILTER=True
 SECURE_CONTENT_TYPE_NOSNIFF=True
-X_FRAME_OPTIONS=DENY
+SECURE_HSTS_SECONDS=31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS=True
+SECURE_HSTS_PRELOAD=True
 
-# Static and Media Files
-STATIC_ROOT=/var/www/watchparty/static
-MEDIA_ROOT=/var/www/watchparty/media
-STATIC_URL=/static/
-MEDIA_URL=/media/
-
-# Logging
-LOG_LEVEL=INFO
-LOG_DIR=$LOG_DIR
-
-# Email Configuration (Update with your SMTP settings)
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USE_TLS=True
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
-
-# Backup Configuration
-BACKUP_DIR=$BACKUP_DIR
-BACKUP_RETENTION_DAYS=30
-
-# Performance Settings
-CONN_MAX_AGE=60
-DATABASE_POOL_SIZE=20
-
-# Monitoring
+# Monitoring & Environment
 SENTRY_DSN=
-ENABLE_MONITORING=True
+ENVIRONMENT=production
 
-# Third-party Services (Update as needed)
+# Rate Limiting / Analytics / Video Processing
+RATE_LIMIT_ENABLED=True
+ANALYTICS_RETENTION_DAYS=365
+VIDEO_MAX_FILE_SIZE=5368709120
+VIDEO_PROCESSING_TIMEOUT=1800
+
+# WebSocket / Parties / ML
+WS_MAX_CONNECTIONS_PER_IP=20
+WS_HEARTBEAT_INTERVAL=30
+MAX_PARTY_PARTICIPANTS=100
+ML_PREDICTIONS_ENABLED=False
+
+# Celery Worker Settings
+CELERY_TASK_ALWAYS_EAGER=False
+CELERY_TASK_EAGER_PROPAGATES=True
+CELERY_WORKER_CONCURRENCY=4
+CELERY_WORKER_MAX_TASKS_PER_CHILD=1000
+
+# AWS Placeholders (set via secret manager)
+USE_S3=False
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_STORAGE_BUCKET_NAME=
-AWS_S3_REGION_NAME=us-east-1
+AWS_S3_REGION_NAME=eu-west-3
 
-# Social Authentication
-GOOGLE_OAUTH2_CLIENT_ID=
-GOOGLE_OAUTH2_CLIENT_SECRET=
-FACEBOOK_APP_ID=
-FACEBOOK_APP_SECRET=
-
-# API Keys
-YOUTUBE_API_KEY=
-TWITCH_CLIENT_ID=
-TWITCH_CLIENT_SECRET=
+# Infrastructure IDs (non-secret)
+VPC_ID=
+RDS_SECURITY_GROUP_ID=
+ELASTICACHE_SECURITY_GROUP_ID=
+APPLICATION_SECURITY_GROUP_ID=
 EOF
     
-    # Set appropriate permissions
     chmod 600 "$env_file"
-    
     log_success "Production environment file created: $env_file"
-    log_warning "Please review and update the configuration with your actual values"
-    log_info "Especially update:"
-    echo "  - ALLOWED_HOSTS with your domain"
-    echo "  - Database credentials"
-    echo "  - Email settings"
-    echo "  - API keys and secrets"
+    log_warning "Update DATABASE_URL, REDIS_URL and secrets via secret manager or edit file."
 }
 
 validate_env_config() {
     log_info "Validating environment configuration..."
-    
-    local env_file="$PROJECT_ROOT/.env.production"
+    local env_file="$PROD_ENV_FILE"
     
     if [[ ! -f "$env_file" ]]; then
         log_error "Production environment file not found"
@@ -760,8 +762,8 @@ deploy_application() {
         --exclude='backups/' \
         "$PROJECT_ROOT/" "$PRODUCTION_DIR/"
     
-    # Copy production environment file
-    cp "$PROJECT_ROOT/.env.production" "$PRODUCTION_DIR/.env"
+    # Copy production environment file (unified)
+    cp "$PROD_ENV_FILE" "$PRODUCTION_DIR/.env"
     chmod 600 "$PRODUCTION_DIR/.env"
     
     # Create virtual environment
@@ -1545,7 +1547,7 @@ setup_production() {
     echo "  • WebSocket Port: $DEFAULT_WEBSOCKET_PORT"
     echo
     log_info "Next Steps:"
-    echo "  1. Update ALLOWED_HOSTS in .env.production with your domain"
+    echo "  1. Update ALLOWED_HOSTS in $(basename "$PROD_ENV_FILE") with your domain"
     echo "  2. Set up SSL with: ./manage.sh ssl-setup"
     echo "  3. Configure your domain DNS to point to this server"
     echo "  4. Monitor logs with: ./manage.sh prod logs"
