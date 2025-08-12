@@ -114,6 +114,13 @@ list_secrets() {
 }
 
 drop_all_secrets() {
+    local force_mode=false
+    
+    # Check if --force flag is passed
+    if [[ "$1" == "--force" ]]; then
+        force_mode=true
+    fi
+    
     log_warning "This will DELETE ALL repository secrets!"
     
     if ! check_github_cli; then
@@ -135,13 +142,15 @@ drop_all_secrets() {
         return 1
     fi
     
-    # Confirmation prompt
-    echo
-    read -p "Are you sure you want to delete ALL secrets? (type 'YES' to confirm): " confirmation
-    
-    if [[ "$confirmation" != "YES" ]]; then
-        log_info "Operation cancelled"
-        return 0
+    # Confirmation prompt (unless force mode)
+    if [[ "$force_mode" == false ]]; then
+        echo
+        read -p "Are you sure you want to delete ALL secrets? (type 'YES' to confirm): " confirmation
+        
+        if [[ "$confirmation" != "YES" ]]; then
+            log_info "Operation cancelled"
+            return 0
+        fi
     fi
     
     log_info "Deleting all repository secrets..."
@@ -161,18 +170,33 @@ drop_all_secrets() {
         if [[ -n "$secret_name" ]]; then
             echo "Deleting secret: $secret_name"
             
-            # Try to delete with more verbose error handling
-            if output=$(gh secret delete "$secret_name" --confirm 2>&1); then
+            # Try different approaches to delete the secret
+            local delete_success=false
+            local error_output=""
+            
+            # Method 1: Direct deletion
+            if error_output=$(gh secret delete "$secret_name" 2>&1); then
+                delete_success=true
+            else
+                # Method 2: Try with auto-confirmation
+                if error_output=$(printf "y\n" | gh secret delete "$secret_name" 2>&1); then
+                    delete_success=true
+                fi
+            fi
+            
+            if [[ "$delete_success" == true ]]; then
                 log_success "Deleted: $secret_name"
                 ((deleted_count++))
             else
                 log_warning "Failed to delete: $secret_name"
-                if [[ "$output" == *"not found"* ]]; then
+                if [[ "$error_output" == *"not found"* ]]; then
                     log_info "  Reason: Secret not found"
-                elif [[ "$output" == *"permission"* ]] || [[ "$output" == *"forbidden"* ]]; then
+                elif [[ "$error_output" == *"permission"* ]] || [[ "$error_output" == *"forbidden"* ]]; then
                     log_info "  Reason: Insufficient permissions"
+                elif [[ "$error_output" == *"unknown flag"* ]]; then
+                    log_info "  Error: Invalid command flag"
                 else
-                    log_info "  Error: $output"
+                    log_info "  Error: $error_output"
                 fi
                 ((failed_count++))
             fi
@@ -407,7 +431,7 @@ show_help() {
     echo -e "${WHITE}OPTIONS:${NC}"
     echo -e "  ${GREEN}--set [env_file]${NC}        Set secrets from environment file (default: .env)"
     echo -e "  ${GREEN}--list${NC}                  List all current repository secrets"
-    echo -e "  ${GREEN}--drop${NC}                  Delete ALL repository secrets (requires confirmation)"
+    echo -e "  ${GREEN}--drop [--force]${NC}        Delete ALL repository secrets (requires confirmation)"
     echo -e "  ${GREEN}--check${NC}                 Check which deployment secrets are missing"
     echo -e "  ${GREEN}--set-missing${NC}           Set only missing deployment secrets"
     echo -e "  ${GREEN}--deploy-secrets${NC}        Set deployment-specific secrets"
@@ -419,7 +443,8 @@ show_help() {
     echo -e "  $0 --list               # List all current secrets"
     echo -e "  $0 --check              # Check missing deployment secrets"
     echo -e "  $0 --set-missing        # Set only missing deployment secrets"
-    echo -e "  $0 --drop               # Delete all secrets (dangerous!)"
+    echo -e "  $0 --drop               # Delete all secrets (requires confirmation)"
+    echo -e "  $0 --drop --force       # Delete all secrets without confirmation"
     echo
     echo -e "${WHITE}REQUIREMENTS:${NC}"
     echo -e "  • GitHub CLI (gh) installed and authenticated"
@@ -445,7 +470,11 @@ main() {
             list_secrets
             ;;
         --drop)
-            drop_all_secrets
+            if [[ "$2" == "--force" ]]; then
+                drop_all_secrets --force
+            else
+                drop_all_secrets
+            fi
             ;;
         --check|--check-missing)
             check_missing_deployment_secrets
