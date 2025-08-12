@@ -2,9 +2,9 @@ name: Deploy Watch Party Backend
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch:
     inputs:
       force_deploy:
@@ -71,7 +71,7 @@ jobs:
           retention-days: 30
 
   deploy:
-    needs: [ build ]
+    needs: [build]
     runs-on: ubuntu-latest
     if: needs.build.outputs.deployment_ready == 'true'
     environment: production
@@ -122,49 +122,49 @@ jobs:
         env:
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          cat > ci_remote_deploy.sh <<'SCRIPT'
-#!/bin/bash
-set -e
-DEPLOY_DIR="${DEPLOY_DIR:-/var/www/watch-party-backend}"
-SERVICE_USER="${SERVER_USER:-www-data}"
-mkdir -p "$DEPLOY_DIR"
-cd /tmp/watchparty-deploy
-rsync -av --exclude='venv' --exclude='.env' ./ "$DEPLOY_DIR/"
-if [[ -f ./.env.generated && ! -f "$DEPLOY_DIR/.env" ]]; then
-  mv ./.env.generated "$DEPLOY_DIR/.env"
-  chmod 600 "$DEPLOY_DIR/.env"
-fi
-cd "$DEPLOY_DIR"
-if [[ ! -d venv ]]; then python3 -m venv venv; fi
-source venv/bin/activate
-pip install --upgrade pip setuptools wheel
-pip install -r requirements.txt
-pip install gunicorn gevent
-python manage.py migrate --noinput || true
-python manage.py collectstatic --noinput || true
-if [[ ! -f /etc/systemd/system/watchparty-gunicorn.service ]]; then
-  cat > /tmp/watchparty-gunicorn.service <<EOF
-[Unit]
-Description=Watch Party Gunicorn
-After=network.target
-[Service]
-Type=notify
-User=$SERVICE_USER
-Group=www-data
-WorkingDirectory=$DEPLOY_DIR
-EnvironmentFile=$DEPLOY_DIR/.env
-ExecStart=$DEPLOY_DIR/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 --worker-class gevent watchparty.wsgi:application
-Restart=on-failure
-[Install]
-WantedBy=multi-user.target
-EOF
-  sudo mv /tmp/watchparty-gunicorn.service /etc/systemd/system/watchparty-gunicorn.service
-  sudo systemctl daemon-reload
-fi
-sudo systemctl restart watchparty-gunicorn || sudo systemctl start watchparty-gunicorn
-sleep 5
-curl -f http://127.0.0.1:8000/health/ >/dev/null 2>&1 && echo "Health OK" || echo "Health endpoint failed"
-SCRIPT
+          cat > ci_remote_deploy.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+          DEPLOY_DIR="${DEPLOY_DIR:-/var/www/watch-party-backend}"
+          SERVICE_USER="${SERVER_USER:-www-data}"
+          mkdir -p "$DEPLOY_DIR"
+          cd /tmp/watchparty-deploy
+          rsync -av --exclude='venv' --exclude='.env' ./ "$DEPLOY_DIR/"
+          if [[ -f ./.env.generated && ! -f "$DEPLOY_DIR/.env" ]]; then
+            mv ./.env.generated "$DEPLOY_DIR/.env"
+            chmod 600 "$DEPLOY_DIR/.env"
+          fi
+          cd "$DEPLOY_DIR"
+          if [[ ! -d venv ]]; then python3 -m venv venv; fi
+          source venv/bin/activate
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          pip install gunicorn gevent
+          python manage.py migrate --noinput || true
+          python manage.py collectstatic --noinput || true
+          if [[ ! -f /etc/systemd/system/watchparty-gunicorn.service ]]; then
+            cat > /tmp/watchparty-gunicorn.service << EOF
+          [Unit]
+          Description=Watch Party Gunicorn
+          After=network.target
+          [Service]
+          Type=notify
+          User=$SERVICE_USER
+          Group=www-data
+          WorkingDirectory=$DEPLOY_DIR
+          EnvironmentFile=$DEPLOY_DIR/.env
+          ExecStart=$DEPLOY_DIR/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 --worker-class gevent watchparty.wsgi:application
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+            sudo mv /tmp/watchparty-gunicorn.service /etc/systemd/system/watchparty-gunicorn.service
+            sudo systemctl daemon-reload
+          fi
+          sudo systemctl restart watchparty-gunicorn || sudo systemctl start watchparty-gunicorn
+          sleep 5
+          curl -f http://127.0.0.1:8000/health/ >/dev/null 2>&1 && echo "Health OK" || echo "Health endpoint failed"
+          SCRIPT
           chmod +x ci_remote_deploy.sh
       - name: Deploy to server
         env:
@@ -187,7 +187,7 @@ SCRIPT
             echo "❌ Deployment failed"
           fi
   cleanup:
-    needs: [ deploy ]
+    needs: [deploy]
     runs-on: ubuntu-latest
     if: always()
     steps:
