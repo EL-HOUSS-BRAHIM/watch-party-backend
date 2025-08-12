@@ -1,0 +1,117 @@
+name: 💾 Backup
+
+on:
+  schedule:
+    # Run daily backup at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      backup_type:
+        description: 'Type of backup'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - database
+        - files
+        - full
+
+env:
+  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+  DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+  BACKUP_RETENTION_DAYS: ${{ vars.BACKUP_RETENTION_DAYS || '7' }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🔑 Setup SSH key
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      run: |
+        mkdir -p ~/.ssh
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -p $DEPLOY_PORT -H $DEPLOY_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+
+    - name: 💾 Create backup
+      id: backup
+      run: |
+        echo "💾 Creating backup on production server..."
+        
+        BACKUP_TYPE="${{ github.event.inputs.backup_type || 'full' }}"
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        
+        ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST "
+          cd /var/www/watchparty
+          
+          echo '💾 Creating $BACKUP_TYPE backup...'
+          
+          case '$BACKUP_TYPE' in
+            'database')
+              ./manage.sh db-backup
+              ;;
+            'files')
+              ./manage.sh backup --files-only
+              ;;
+            'full'|*)
+              ./manage.sh backup
+              ;;
+          esac
+          
+          # Get backup info
+          BACKUP_SIZE=\$(du -sh /var/backups/watchparty/ 2>/dev/null | cut -f1 || echo 'Unknown')
+          BACKUP_COUNT=\$(ls -1 /var/backups/watchparty/ 2>/dev/null | wc -l || echo '0')
+          
+          echo \"BACKUP_SIZE=\$BACKUP_SIZE\" >> backup_info.txt
+          echo \"BACKUP_COUNT=\$BACKUP_COUNT\" >> backup_info.txt
+          
+          # Cleanup old backups
+          echo '🧹 Cleaning up old backups (keeping last $BACKUP_RETENTION_DAYS days)...'
+          find /var/backups/watchparty/ -name '*.tar.gz' -mtime +$BACKUP_RETENTION_DAYS -delete 2>/dev/null || true
+          find /var/backups/watchparty/ -name '*.sql' -mtime +$BACKUP_RETENTION_DAYS -delete 2>/dev/null || true
+        "
+        
+        # Get backup info
+        scp -P $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST:/var/www/watchparty/backup_info.txt . 2>/dev/null || true
+        
+        if [ -f backup_info.txt ]; then
+          source backup_info.txt
+          echo "backup_size=$BACKUP_SIZE" >> $GITHUB_OUTPUT
+          echo "backup_count=$BACKUP_COUNT" >> $GITHUB_OUTPUT
+          echo "backup_status=success" >> $GITHUB_OUTPUT
+        else
+          echo "backup_status=failed" >> $GITHUB_OUTPUT
+        fi
+
+    - name: 📊 Backup summary
+      run: |
+        echo "## 💾 Backup Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Server**: $DEPLOY_HOST" >> $GITHUB_STEP_SUMMARY
+        echo "- **Backup Type**: ${{ github.event.inputs.backup_type || 'full' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: $(date)" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.backup.outputs.backup_status }}" == "success" ]; then
+          echo "- **Status**: ✅ Backup completed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Size**: ${{ steps.backup.outputs.backup_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Backups**: ${{ steps.backup.outputs.backup_count }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Status**: ❌ Backup failed!" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Backup Management" >> $GITHUB_STEP_SUMMARY
+        echo "- View backups: \`ls -la /var/backups/watchparty/\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Restore backup: \`./manage.sh restore <backup_file>\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Manual backup: \`./manage.sh backup\`" >> $GITHUB_STEP_SUMMARY
+
+    - name: 🚨 Alert on failure
+      if: steps.backup.outputs.backup_status == 'failed'
+      run: |
+        echo "🚨 Backup failed!"
+        echo "Server: $DEPLOY_HOST"
+        echo "Time: $(date)"
+        # Add alerting logic here

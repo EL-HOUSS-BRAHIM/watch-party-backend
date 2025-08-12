@@ -1,746 +1,406 @@
-name: Deploy Watch Party Backend
+name: 🚀 Deploy to Production
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    branches: [ master, main ]
   workflow_dispatch:
     inputs:
-      force_deploy:
-        description: 'Force deployment'
+      deployment_type:
+        description: 'Type of deployment'
+        required: true
+        default: 'update'
+        type: choice
+        options:
+        - update
+        - fresh_setup
+        - full_rebuild
+      skip_tests:
+        description: 'Skip tests during deployment'
         required: false
         default: false
         type: boolean
 
-# Principle of least privilege for GHA token
-permissions:
-  contents: read
-  id-token: write  # (Reserved if later switching to OIDC-based secrets/infra auth)
-  actions: read
-  checks: read
-
-# Prevent overlapping deployments on same branch
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
-  PYTHON_VERSION: '3.12'
+  # Server connection details (from secrets)
+  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+  DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+  
+  # Database configuration (from secrets)
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
+  DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+  DATABASE_USER: ${{ secrets.DATABASE_USER }}
+  DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+  DATABASE_PORT: ${{ secrets.DATABASE_PORT || '5432' }}
+  
+  # Redis configuration (from secrets)
+  REDIS_URL: ${{ secrets.REDIS_URL }}
+  REDIS_HOST: ${{ secrets.REDIS_HOST || 'localhost' }}
+  REDIS_PORT: ${{ secrets.REDIS_PORT || '6379' }}
+  
+  # Django settings (from secrets)
+  SECRET_KEY: ${{ secrets.SECRET_KEY }}
+  DEBUG: ${{ secrets.DEBUG || 'False' }}
+  ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+  
+  # Email configuration (from secrets)
+  EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+  EMAIL_PORT: ${{ secrets.EMAIL_PORT || '587' }}
+  EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+  EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+  EMAIL_USE_TLS: ${{ secrets.EMAIL_USE_TLS || 'True' }}
+  
+  # Security and external services (from secrets)
+  CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
+  CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
+  
+  # Social auth (from secrets)
+  GOOGLE_OAUTH2_KEY: ${{ secrets.GOOGLE_OAUTH2_KEY }}
+  GOOGLE_OAUTH2_SECRET: ${{ secrets.GOOGLE_OAUTH2_SECRET }}
+  GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
+  GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
+  
+  # AWS settings (from secrets)
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_STORAGE_BUCKET_NAME: ${{ secrets.AWS_STORAGE_BUCKET_NAME }}
+  AWS_S3_REGION_NAME: ${{ secrets.AWS_S3_REGION_NAME }}
+  
+  # Additional settings
+  ENVIRONMENT: 'production'
+  DEPLOYMENT_TYPE: ${{ github.event.inputs.deployment_type || 'update' }}
 
 jobs:
-  build:
+  # Pre-deployment checks
+  pre-deployment-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    if: >-
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event.inputs.force_deploy == 'true') && github.event_name != 'pull_request'
     outputs:
-      deployment_ready: ${{ steps.check_deployment.outputs.ready }}
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+      commit_sha: ${{ steps.check.outputs.commit_sha }}
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Set up Python (for validation / lock)
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-          cache-dependency-path: requirements.txt
-      - name: Validate workflow inputs
-        id: validate
-        run: |
-          echo "force_deploy=${{ github.event.inputs.force_deploy || 'false' }}"
-      - name: Check deployment readiness
-        id: check_deployment
-        run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" || "${{ github.event.inputs.force_deploy }}" == "true" ]]; then
-            echo "ready=true" >> $GITHUB_OUTPUT
-          else
-            echo "ready=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Freeze dependencies (for traceability)
-        if: steps.check_deployment.outputs.ready == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip freeze > requirements.freeze.txt
-      - name: Create deployment package
-        if: steps.check_deployment.outputs.ready == 'true'
-        run: |
-          mkdir -p deployment-package
-          rsync -av --exclude='.git' \
-                    --exclude='*.pyc' \
-                    --exclude='__pycache__' \
-                    --exclude='.pytest_cache' \
-                    --exclude='node_modules' \
-                    --exclude='.env' \
-                    --exclude='db.sqlite3' \
-                    --exclude='logs' \
-                    --exclude='.coverage' \
-                    --exclude='htmlcov' \
-                    --exclude='*.log' \
-                    --exclude='.vscode' \
-                    --exclude='.idea' \
-                    ./ deployment-package/
-          # Copy optional env/example files only if present
-          for f in .env.example .env.production; do
-            if [[ -f "$f" ]]; then
-              cp "$f" deployment-package/
-            else
-              echo "$f not found, skipping"
-            fi
-          done
-          cp requirements.freeze.txt deployment-package/ 2>/dev/null || true
-          if [[ -f .env ]]; then
-            grep -Ev '^(SECRET_KEY=|DATABASE_URL=postgresql://watchparty_admin:|REDIS_URL=rediss://|DATABASE_PASSWORD=|REDIS_PASSWORD=)' .env > deployment-package/.env.template || true
-          fi
-          cat > deployment-package/deployment-info.json <<'JSON'
-          {
-            "commit_sha": "${{ github.sha }}",
-            "commit_message": "$(echo "$(git log -1 --pretty=%B | head -1)" | sed 's/"/\\"/g')",
-            "branch": "${{ github.ref_name }}",
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "actor": "${{ github.actor }}",
-            "run_id": "${{ github.run_id }}"
-          }
-          JSON
-      - name: Generate checksums
-        if: steps.check_deployment.outputs.ready == 'true'
-        run: |
-          # Recreate checksum file deterministically; exclude itself & CI/meta files
-          (cd deployment-package && \
-            rm -f CHECKSUMS.sha256 && \
-            find . -type f -maxdepth 8 \
-              ! -name 'CHECKSUMS.sha256' \
-              ! -path './.github/*' \
-              ! -path './logs/*' \
-              ! -path './**/__pycache__/*' \
-              ! -name '*.pyc' \
-              -print0 | sort -z | xargs -0 sha256sum > CHECKSUMS.sha256)
-      - name: Upload deployment package
-        if: steps.check_deployment.outputs.ready == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-package
-          path: deployment-package/
-          retention-days: 30
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: 🔍 Validate secrets
+      id: check
+      run: |
+        echo "🔍 Validating required secrets..."
+        
+        # Check required secrets
+        REQUIRED_SECRETS=(
+          "DEPLOY_HOST"
+          "DEPLOY_USER" 
+          "SSH_PRIVATE_KEY"
+          "SECRET_KEY"
+          "DATABASE_URL"
+        )
+        
+        MISSING_SECRETS=()
+        
+        if [ -z "${{ secrets.DEPLOY_HOST }}" ]; then MISSING_SECRETS+=("DEPLOY_HOST"); fi
+        if [ -z "${{ secrets.DEPLOY_USER }}" ]; then MISSING_SECRETS+=("DEPLOY_USER"); fi
+        if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then MISSING_SECRETS+=("SSH_PRIVATE_KEY"); fi
+        if [ -z "${{ secrets.SECRET_KEY }}" ]; then MISSING_SECRETS+=("SECRET_KEY"); fi
+        if [ -z "${{ secrets.DATABASE_URL }}" ]; then MISSING_SECRETS+=("DATABASE_URL"); fi
+        
+        if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+          echo "❌ Missing required secrets: ${MISSING_SECRETS[*]}"
+          echo "Please add these secrets to your repository settings."
+          exit 1
+        fi
+        
+        echo "✅ All required secrets are present"
+        echo "should_deploy=true" >> $GITHUB_OUTPUT
+        echo "commit_sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
-  deploy:
-    needs: [build]
+  # Run tests (optional)
+  run-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: needs.build.outputs.deployment_ready == 'true'
-    environment: production
+    needs: pre-deployment-checks
+    if: needs.pre-deployment-checks.outputs.should_deploy == 'true' && github.event.inputs.skip_tests != 'true'
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_watchparty
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
     steps:
-      - name: Checkout code (for remote script)
-        uses: actions/checkout@v4
-      - name: Download deployment package
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package
-          path: deployment-package/
-      - name: Verify checksums
-        run: |
-          cd deployment-package
-          if [[ ! -f CHECKSUMS.sha256 ]]; then
-            echo "No checksum file present, skipping verification"
-            exit 0
-          fi
-          # Filter out any entries whose files are absent (e.g., intentionally excluded on deploy)
-          TMP_FILE=$(mktemp)
-          while read -r hash path; do
-            # path comes like: <hash><space><space>./relative
-            file=${path#./}
-            if [[ -f "$file" ]]; then
-              printf '%s  %s\n' "$hash" "$path" >> "$TMP_FILE"
-            else
-              echo "Skipping missing $path"
-            fi
-          done < CHECKSUMS.sha256
-          if [[ ! -s "$TMP_FILE" ]]; then
-            echo "No files left to verify; skipping"
-            exit 0
-          fi
-          sha256sum -c "$TMP_FILE" || { echo "Checksum mismatch(s) detected"; exit 1; }
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-      - name: Generate production .env (sanitized) locally
-        env:
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
-          CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
-          CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
-          CHANNEL_LAYERS_CONFIG_HOSTS: ${{ secrets.CHANNEL_LAYERS_CONFIG_HOSTS }}
-          DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
-          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
-          EMAIL_USE_TLS: ${{ secrets.EMAIL_USE_TLS }}
-          EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
-          EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
-        run: |
-          OUT=deployment-package/.env.generated
-          : > "$OUT"
-          echo "SECRET_KEY=$SECRET_KEY" >> "$OUT"
-          echo "DJANGO_SETTINGS_MODULE=watchparty.settings.production" >> "$OUT"
-          echo "ALLOWED_HOSTS=$ALLOWED_HOSTS" >> "$OUT"
-          echo "CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS" >> "$OUT"
-          echo "DATABASE_URL=$DATABASE_URL" >> "$OUT"
-          echo "REDIS_URL=$REDIS_URL" >> "$OUT"
-          echo "CELERY_BROKER_URL=$CELERY_BROKER_URL" >> "$OUT"
-          echo "CELERY_RESULT_BACKEND=$CELERY_RESULT_BACKEND" >> "$OUT"
-          echo "CHANNEL_LAYERS_CONFIG_HOSTS=$CHANNEL_LAYERS_CONFIG_HOSTS" >> "$OUT"
-          echo "DEFAULT_FROM_EMAIL=$DEFAULT_FROM_EMAIL" >> "$OUT"
-          # Email configuration (with fallbacks)
-          if [[ -n "${EMAIL_HOST:-}" ]]; then 
-            echo "EMAIL_HOST=$EMAIL_HOST" >> "$OUT"
-          else
-            echo "EMAIL_HOST=smtp.gmail.com" >> "$OUT"
-          fi
-          if [[ -n "${EMAIL_PORT:-}" ]]; then 
-            echo "EMAIL_PORT=$EMAIL_PORT" >> "$OUT"
-          else
-            echo "EMAIL_PORT=587" >> "$OUT"
-          fi
-          if [[ -n "${EMAIL_USE_TLS:-}" ]]; then 
-            echo "EMAIL_USE_TLS=$EMAIL_USE_TLS" >> "$OUT"
-          else
-            echo "EMAIL_USE_TLS=True" >> "$OUT"
-          fi
-          if [[ -n "${EMAIL_HOST_USER:-}" ]]; then echo "EMAIL_HOST_USER=$EMAIL_HOST_USER" >> "$OUT"; fi
-          if [[ -n "${EMAIL_HOST_PASSWORD:-}" ]]; then echo "EMAIL_HOST_PASSWORD=$EMAIL_HOST_PASSWORD" >> "$OUT"; fi
-          if [[ -n "${SENTRY_DSN:-}" ]]; then echo "SENTRY_DSN=$SENTRY_DSN" >> "$OUT"; fi
-          echo "ENVIRONMENT=production" >> "$OUT"
-          echo "DEBUG=False" >> "$OUT"
-          echo "RATE_LIMIT_ENABLED=True" >> "$OUT"
-          # Security settings for production
-          echo "SECURE_SSL_REDIRECT=True" >> "$OUT"
-          echo "SECURE_HSTS_SECONDS=31536000" >> "$OUT"
-          echo "SESSION_COOKIE_SECURE=True" >> "$OUT"
-          echo "CSRF_COOKIE_SECURE=True" >> "$OUT"
-          echo "✅ Generated .env.generated with $(wc -l < "$OUT") environment variables"
-          echo "📋 Environment variables included:"
-          grep -E '^[A-Z_]+=.*$' "$OUT" | cut -d'=' -f1 | sort
-          ls -la deployment-package/.env.generated
-      - name: Prepare remote deploy script
-        env:
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-        run: |
-          cat > ci_remote_deploy.sh << 'SCRIPT'
-          #!/bin/bash
-          set -euo pipefail
-          umask 022
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: 🧪 Run tests
+      env:
+        DEBUG: 'True'
+        SECRET_KEY: 'test-key-for-ci'
+        DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/test_watchparty'
+        REDIS_URL: 'redis://localhost:6379/0'
+      run: |
+        echo "🧪 Running Django tests..."
+        python manage.py test --verbosity=2
 
-          DEPLOY_DIR="${DEPLOY_DIR:-/var/www/watch-party-backend}"
-          SERVICE_USER="${SERVER_USER:-www-data}"
-          SERVICE_GROUP="www-data"
-
-          echo "$(date): 🔧 Starting server environment setup..."
-          echo "Deploy directory: $DEPLOY_DIR"
-          echo "Service user: $SERVICE_USER"
-
-          # Detect package manager
-          if command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get update -qq || true
-            INSTALLER="apt-get install -y"
-          elif command -v yum >/dev/null 2>&1; then
-            sudo yum -y -q update || true
-            INSTALLER="yum install -y"
-          elif command -v dnf >/dev/null 2>&1; then
-            sudo dnf -y -q update || true
-            INSTALLER="dnf install -y"
-          else
-            echo "Unsupported package manager"; exit 1
-          fi
-
-          echo "Installing base packages (idempotent)"
-          if command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get install -y python3 python3-venv python3-pip python3-dev build-essential libpq-dev rsync curl git netcat-traditional || true
-          else
-            sudo $INSTALLER python3 python3-pip rsync curl git netcat || true
-          fi
-
-          # Increase system limits for the deployment
-          echo "Configuring system limits..."
-          echo "* soft nofile 65536" | sudo tee -a /etc/security/limits.conf >/dev/null || true
-          echo "* hard nofile 65536" | sudo tee -a /etc/security/limits.conf >/dev/null || true
+  # Deploy to production
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, run-tests]
+    if: always() && needs.pre-deployment-checks.outputs.should_deploy == 'true' && (needs.run-tests.result == 'success' || needs.run-tests.result == 'skipped')
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔑 Setup SSH key
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      run: |
+        echo "🔑 Setting up SSH key..."
+        mkdir -p ~/.ssh
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -p $DEPLOY_PORT -H $DEPLOY_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+    
+    - name: 🧪 Test SSH connection
+      run: |
+        echo "🧪 Testing SSH connection..."
+        ssh -p $DEPLOY_PORT -o ConnectTimeout=10 -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "echo 'SSH connection successful!'"
+    
+    - name: 📤 Upload code to server
+      run: |
+        echo "📤 Uploading code to server..."
+        
+        # Create deployment directory on server
+        ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST "
+          sudo mkdir -p /var/www/watchparty
+          sudo chown -R $DEPLOY_USER:$DEPLOY_USER /var/www/watchparty
+        "
+        
+        # Sync code to server (excluding sensitive files)
+        rsync -avz -e "ssh -p $DEPLOY_PORT" \
+          --exclude='.git' \
+          --exclude='*.pyc' \
+          --exclude='__pycache__' \
+          --exclude='.env*' \
+          --exclude='staticfiles' \
+          --exclude='media' \
+          --exclude='logs/*.log' \
+          --delete \
+          ./ $DEPLOY_USER@$DEPLOY_HOST:/var/www/watchparty/
+    
+    - name: 🔧 Create production environment file
+      run: |
+        echo "🔧 Creating production environment file..."
+        
+        # Create .env file with all secrets
+        ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST "
+          cd /var/www/watchparty
           
-          # Set current session limits
-          ulimit -n 65536 2>/dev/null || true
-
-          # Create service user if missing
-          if ! id "$SERVICE_USER" >/dev/null 2>&1; then
-            sudo useradd -r -s /usr/sbin/nologin -d /var/www -c "WatchParty Service User" "$SERVICE_USER" || true
-          fi
-
-          # Directory setup & ownership BEFORE rsync
-          sudo mkdir -p "$DEPLOY_DIR" /var/log/watchparty
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR" /var/log/watchparty
-
-          echo "📤 Syncing project files to $DEPLOY_DIR";
-          sudo rsync -av --delete --exclude='venv' --exclude='.env' --exclude='.env.generated' --chown=$SERVICE_USER:$SERVICE_GROUP ./ "$DEPLOY_DIR/"
-
-          # Ensure application log directory exists AFTER rsync (matching Django settings)
-          sudo mkdir -p /var/log/watchparty "$DEPLOY_DIR/logs"
-          sudo touch /var/log/watchparty/django.log
-          sudo touch /var/log/watchparty/django_errors.log
-          sudo touch /var/log/watchparty/access.log
-          sudo touch /var/log/watchparty/error.log
-          # Create project-level logs as backup (base settings reference)
-          sudo touch "$DEPLOY_DIR/logs/django.log"
-          sudo touch "$DEPLOY_DIR/logs/security.log"
-          sudo touch "$DEPLOY_DIR/logs/performance.log"
-          # Create symlinks for backward compatibility
-          sudo ln -sf /var/log/watchparty/django.log "$DEPLOY_DIR/logs/django_main.log" 2>/dev/null || true
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty "$DEPLOY_DIR/logs"
-          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log /var/log/watchparty/access.log /var/log/watchparty/error.log || true
-          sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
-
-          # Handle environment file - CRITICAL for service startup
-          echo "🔧 Setting up environment file..."
-          ENV_FILE=""
-          if [[ -f ./.env.generated ]]; then
-            echo "Found .env.generated, using it"
-            ENV_FILE="./.env.generated"
-          elif [[ -f ./.env.production ]]; then
-            echo "Found .env.production, using it as fallback"  
-            ENV_FILE="./.env.production"
-          elif [[ -f ./.env.example ]]; then
-            echo "Found .env.example, using it as last resort"
-            ENV_FILE="./.env.example"
-          else
-            echo "❌ No environment file found - this is a critical error"
-            echo "Available files in current directory:"
-            ls -la || true
-            exit 1
-          fi
+          # Create production .env file
+          cat > .env << 'EOF'
+        # =============================================================================
+        # WATCH PARTY BACKEND - PRODUCTION ENVIRONMENT
+        # =============================================================================
+        # Generated by GitHub Actions on $(date)
+        # Commit: ${{ github.sha }}
+        
+        # Environment
+        ENVIRONMENT=production
+        DEBUG=$DEBUG
+        
+        # Security
+        SECRET_KEY=$SECRET_KEY
+        ALLOWED_HOSTS=$ALLOWED_HOSTS
+        CORS_ALLOWED_ORIGINS=$CORS_ALLOWED_ORIGINS
+        CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS
+        
+        # Database
+        DATABASE_URL=$DATABASE_URL
+        DATABASE_HOST=$DATABASE_HOST
+        DATABASE_NAME=$DATABASE_NAME
+        DATABASE_USER=$DATABASE_USER
+        DATABASE_PASSWORD=$DATABASE_PASSWORD
+        DATABASE_PORT=$DATABASE_PORT
+        
+        # Redis
+        REDIS_URL=$REDIS_URL
+        REDIS_HOST=$REDIS_HOST
+        REDIS_PORT=$REDIS_PORT
+        
+        # Celery
+        CELERY_BROKER_URL=$REDIS_URL
+        CELERY_RESULT_BACKEND=$REDIS_URL
+        
+        # Email
+        EMAIL_HOST=$EMAIL_HOST
+        EMAIL_PORT=$EMAIL_PORT
+        EMAIL_HOST_USER=$EMAIL_HOST_USER
+        EMAIL_HOST_PASSWORD=$EMAIL_HOST_PASSWORD
+        EMAIL_USE_TLS=$EMAIL_USE_TLS
+        
+        # Social Authentication
+        GOOGLE_OAUTH2_KEY=$GOOGLE_OAUTH2_KEY
+        GOOGLE_OAUTH2_SECRET=$GOOGLE_OAUTH2_SECRET
+        GITHUB_CLIENT_ID=$GITHUB_CLIENT_ID
+        GITHUB_CLIENT_SECRET=$GITHUB_CLIENT_SECRET
+        
+        # AWS (if using)
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+        AWS_STORAGE_BUCKET_NAME=$AWS_STORAGE_BUCKET_NAME
+        AWS_S3_REGION_NAME=$AWS_S3_REGION_NAME
+        
+        # Additional production settings
+        SECURE_SSL_REDIRECT=True
+        SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+        SESSION_COOKIE_SECURE=True
+        CSRF_COOKIE_SECURE=True
+        SECURE_BROWSER_XSS_FILTER=True
+        SECURE_CONTENT_TYPE_NOSNIFF=True
+        EOF
           
-          echo "Using environment file: $ENV_FILE"
-          sudo cp "$ENV_FILE" "$DEPLOY_DIR/.env"
-          sudo chmod 600 "$DEPLOY_DIR/.env"
-          sudo chown $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR/.env"
-          echo "✅ Environment file placed successfully from $ENV_FILE"
-
-          cd "$DEPLOY_DIR"
-          echo "🔧 Ensuring clean & writable virtual environment"
-          if [[ -d venv ]]; then
-            OWNER=$(stat -c %U venv || echo unknown)
-            if [[ "$OWNER" != "$SERVICE_USER" ]]; then
-              echo "Existing venv owned by $OWNER; removing with sudo"
-              sudo rm -rf venv || { echo "Failed to remove existing venv"; exit 1; }
-            elif [[ ! -w venv/bin/python* ]]; then
-              echo "Existing venv not writable; removing"
-              sudo rm -rf venv || { echo "Failed to remove unwritable venv"; exit 1; }
-            fi
-          fi
-          if [[ -d venv && ! -f venv/bin/activate ]]; then
-            echo "Corrupted venv detected; removing"
-            sudo rm -rf venv || { echo "Failed to remove corrupted venv"; exit 1; }
-          fi
-          if [[ ! -d venv ]]; then
-            echo "Creating venv as $SERVICE_USER"
-            sudo -u $SERVICE_USER -H python3 -m venv venv || { echo "Failed to create venv"; exit 1; }
-          fi
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP venv || true
-          sudo chmod -R u+w venv || true
-          # Verify site-packages writable; attempt auto-fix once if not
-          if ! sudo -u $SERVICE_USER -H python3 -c "import sys,os,pathlib; sp=[p for p in sys.path if p.endswith('site-packages')]; sp=sp[0] if sp else ''; print('Site-packages:', sp); (pathlib.Path(sp)/'__perm_test__').write_text('ok') if sp else None"; then
-            echo "Attempting permission repair on venv..."
-            sudo chown -R $SERVICE_USER:$SERVICE_GROUP venv || true
-            sudo chmod -R u+rwX venv || true
-            sudo -u $SERVICE_USER -H python3 -c "import sys,os,pathlib; sp=[p for p in sys.path if p.endswith('site-packages')]; sp=sp[0] if sp else ''; print('Recheck Site-packages:', sp); (pathlib.Path(sp)/'__perm_test__').write_text('ok') if sp else None" || { echo "site-packages still not writable for $SERVICE_USER"; ls -ld venv/lib/python*/site-packages || true; exit 1; }
-          fi
-
-          echo "📦 Installing Python dependencies as $SERVICE_USER"
-          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -m ensurepip --upgrade || true && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt'
-          # Verify gevent installation specifically since it's critical for Gunicorn worker
-          echo "🔍 Verifying gevent installation..."
-          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -c "import gevent; print(f\"Gevent version: {gevent.__version__}\")"' || {
-            echo "⚠️ Gevent not found, installing explicitly..."
-            sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && pip install gevent>=24.0.0'
-          }
-          # Ensure gunicorn is available
-          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && pip show gunicorn || pip install gunicorn>=23.0.0'
-
-          echo "🗄 Running migrations & collectstatic"
-          # Ensure logs directory exists before Django operations (matching Django settings)
-          sudo mkdir -p /var/log/watchparty "$DEPLOY_DIR/logs"
-          sudo touch /var/log/watchparty/django.log
-          sudo touch /var/log/watchparty/django_errors.log
-          sudo touch /var/log/watchparty/access.log
-          sudo touch /var/log/watchparty/error.log
-          # Create project-level logs as backup (base settings reference)
-          sudo touch "$DEPLOY_DIR/logs/django.log"
-          sudo touch "$DEPLOY_DIR/logs/security.log"
-          sudo touch "$DEPLOY_DIR/logs/performance.log"
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty "$DEPLOY_DIR/logs"
-          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log /var/log/watchparty/access.log /var/log/watchparty/error.log || true
-          sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
-          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python manage.py migrate --noinput || true && python manage.py collectstatic --noinput || true'
-
-          # Pre-deployment diagnostics and cleanup
-          echo "🔍 Running pre-deployment diagnostics..."
+          # Secure the environment file
+          chmod 600 .env
+        "
+    
+    - name: 🛠️ Setup/Update production server
+      run: |
+        echo "🛠️ Setting up production server..."
+        
+        ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST "
+          cd /var/www/watchparty
           
-          # Check for port conflicts
-          if sudo lsof -i :8000 >/dev/null 2>&1; then
-            echo "Port 8000 is in use. Identifying and stopping conflicting processes..."
-            sudo lsof -i :8000 || true
-            # Kill any processes using port 8000
-            sudo fuser -k 8000/tcp 2>/dev/null || true
-            sleep 2
-          fi
+          # Make scripts executable
+          chmod +x manage.sh
+          chmod +x scripts/*.sh
           
-          # Check system resources
-          echo "System memory: $(free -h | grep 'Mem:' | awk '{print $2 " total, " $7 " available"}')"
-          echo "Disk space: $(df -h $DEPLOY_DIR | tail -1 | awk '{print $4 " available"}')"
-          echo "Open file limit: $(ulimit -n)"
+          # Run appropriate setup based on deployment type
+          case '$DEPLOYMENT_TYPE' in
+            'fresh_setup')
+              echo '🆕 Running fresh server setup...'
+              sudo ./manage.sh prod-setup --fresh
+              ;;
+            'full_rebuild')
+              echo '🔄 Running full rebuild...'
+              sudo ./manage.sh prod-stop || true
+              sudo ./manage.sh clean
+              sudo ./manage.sh prod-setup --rebuild
+              ;;
+            'update'|*)
+              echo '⬆️ Running server update...'
+              # Check if production services exist
+              if sudo systemctl list-units --type=service | grep -q watchparty; then
+                sudo ./manage.sh prod-restart
+              else
+                echo 'No existing services found, running fresh setup...'
+                sudo ./manage.sh prod-setup
+              fi
+              ;;
+          esac
+        "
+    
+    - name: 🔍 Verify deployment
+      run: |
+        echo "🔍 Verifying deployment..."
+        
+        ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST "
+          cd /var/www/watchparty
           
-          # Stop existing service gracefully
-          if sudo systemctl is-active --quiet watchparty-gunicorn 2>/dev/null; then
-            echo "Stopping existing Gunicorn service..."
-            sudo systemctl stop watchparty-gunicorn || true
-            sleep 3
-          fi
+          # Run health checks
+          ./manage.sh check
+          ./manage.sh prod-status
           
-          # Systemd service creation (idempotent)
-          if [[ ! -f /etc/systemd/system/watchparty-gunicorn.service ]]; then
-            cat > /tmp/watchparty-gunicorn.service << EOF
-          [Unit]
-          Description=Watch Party Gunicorn Application Server
-          After=network.target
-          Wants=network-online.target
-          After=network-online.target
-
-          [Service]
-          Type=notify
-          User=$SERVICE_USER
-          Group=$SERVICE_GROUP
-          WorkingDirectory=$DEPLOY_DIR
-          EnvironmentFile=$DEPLOY_DIR/.env
-          Environment=PYTHONPATH=$DEPLOY_DIR
-          Environment=PATH=$DEPLOY_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin
+          # Test application endpoints
+          echo '🌐 Testing application endpoints...'
           
-          # Resource limits
-          LimitNOFILE=65536
-          LimitNPROC=4096
-          MemoryMax=1G
-          
-          # Pre-start checks
-          ExecStartPre=/bin/bash -c 'test -f $DEPLOY_DIR/.env || (echo ".env file missing" && exit 1)'
-          ExecStartPre=/bin/bash -c 'test -f $DEPLOY_DIR/venv/bin/gunicorn || (echo "Gunicorn binary missing" && exit 1)'
-          ExecStartPre=/bin/bash -c 'test -d /var/log/watchparty || mkdir -p /var/log/watchparty'
-          ExecStartPre=/bin/bash -c 'chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty'
-          
-          # Main service command
-          ExecStart=$DEPLOY_DIR/venv/bin/gunicorn \\
-              --bind 127.0.0.1:8000 \\
-              --workers 2 \\
-              --worker-class gevent \\
-              --worker-connections 500 \\
-              --max-requests 500 \\
-              --max-requests-jitter 50 \\
-              --timeout 30 \\
-              --keep-alive 5 \\
-              --access-logfile /var/log/watchparty/access.log \\
-              --error-logfile /var/log/watchparty/error.log \\
-              --log-level info \\
-              --preload \\
-              watchparty.wsgi:application
-          
-          # Process management
-          ExecReload=/bin/kill -s HUP \$MAINPID
-          KillMode=mixed
-          KillSignal=SIGTERM
-          TimeoutStartSec=60
-          TimeoutStopSec=30
-          Restart=on-failure
-          RestartSec=10
-          
-          # Security settings
-          NoNewPrivileges=true
-          PrivateTmp=true
-          ProtectSystem=strict
-          ReadWritePaths=$DEPLOY_DIR /var/log/watchparty /tmp
-          ProtectHome=true
-
-          [Install]
-          WantedBy=multi-user.target
-          EOF
-            sudo mv /tmp/watchparty-gunicorn.service /etc/systemd/system/watchparty-gunicorn.service
-            sudo systemctl daemon-reload
-            sudo systemctl enable watchparty-gunicorn
-          fi
-
-          # Final check - ensure all dependencies are in place before starting service
-          echo "🔧 Final pre-start verification..."
-          sudo mkdir -p /var/log/watchparty "$DEPLOY_DIR/logs"
-          sudo touch /var/log/watchparty/django.log
-          sudo touch /var/log/watchparty/django_errors.log
-          sudo touch /var/log/watchparty/access.log
-          sudo touch /var/log/watchparty/error.log
-          # Create project-level logs as backup (base settings reference)
-          sudo touch "$DEPLOY_DIR/logs/django.log"
-          sudo touch "$DEPLOY_DIR/logs/security.log"
-          sudo touch "$DEPLOY_DIR/logs/performance.log"
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty "$DEPLOY_DIR/logs"
-          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log /var/log/watchparty/access.log /var/log/watchparty/error.log || true
-          sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
-
-          # Verify critical files exist
-          if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
-            echo "❌ .env file missing - cannot start service"
-            exit 1
-          fi
-          
-          if [[ ! -f "$DEPLOY_DIR/venv/bin/gunicorn" ]]; then
-            echo "❌ Gunicorn binary missing - cannot start service"
-            exit 1
-          fi
-          
-          # Test Python environment
-          echo "🐍 Testing Python environment..."
-          sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && python -c 'import django; print(f\"Django version: {django.get_version()}\")'" || {
-            echo "❌ Python environment test failed"
-            exit 1
-          }
-          
-          # Test Django configuration
-          echo "🔧 Testing Django configuration..."
-          sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && python manage.py check --deploy" || {
-            echo "❌ Django configuration check failed"
-            # Don't exit - this might be non-critical
-          }
-          
-          # Test critical module imports
-          echo "🧪 Testing critical module imports..."
-          sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && python -c 'import gevent; import gunicorn; import django; print(\"✅ All critical modules imported successfully\")'" || {
-            echo "❌ Critical module import test failed"
-            echo "Checking installed packages..."
-            sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && pip list | grep -E '(gevent|gunicorn|django)'"
-            exit 1
-          }
-
-          # Start the service with comprehensive error handling
-          echo "🚀 Starting Gunicorn service..."
-          if sudo systemctl start watchparty-gunicorn; then
-            echo "✅ Service start command succeeded"
-            
-            # Wait for service to stabilize
-            sleep 10
-            
-            # Check service status
-            if sudo systemctl is-active --quiet watchparty-gunicorn; then
-              echo "✅ Gunicorn service is running"
-            else
-              echo "❌ Service failed to start properly"
-              sudo systemctl status watchparty-gunicorn --no-pager -l || true
-              sudo journalctl -xeu watchparty-gunicorn --no-pager -l || true
-              exit 1
-            fi
-            
-            # Test port binding
-            if ss -tlnp | grep :8000 >/dev/null; then
-              echo "✅ Service is listening on port 8000"
-            else
-              echo "❌ Service is not listening on port 8000"
-              exit 1
-            fi
-          else
-            echo "❌ Service start command failed"
-            sudo systemctl status watchparty-gunicorn --no-pager -l || true
-            sudo journalctl -xeu watchparty-gunicorn --no-pager -l || true
-            exit 1
-          fi
-
-          echo "Health check"
-          # Give the application time to fully initialize
-          sleep 5
-          if curl -f -m 10 http://127.0.0.1:8000/health/ >/dev/null 2>&1; then
-            echo "✅ Application health check passed"
-          else
-            echo "❌ Application health check failed"
-            # Don't exit here - the service might be starting slowly
-          fi
-          SCRIPT
-          chmod +x ci_remote_deploy.sh
-      - name: Deploy to server
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-          PROJECT_DIR: ${{ secrets.PROJECT_DIR }}
-        timeout-minutes: 30
-        run: |
-          FALLBACK_DIR="/var/www/watch-party-backend"
-          TARGET_DIR="${PROJECT_DIR:-$FALLBACK_DIR}"
-          
-          echo "🚀 Starting deployment to $SERVER_HOST..."
-          echo "Target directory: $TARGET_DIR"
-          
-          # Test SSH connection first
-          echo "🔗 Testing SSH connection..."
-          if ! ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "echo 'SSH connection successful'"; then
-            echo "❌ SSH connection failed"
-            exit 1
-          fi
-          
-          # Clean up and prepare remote directory
-          echo "🧹 Preparing remote directory..."
-          ssh $SERVER_USER@$SERVER_HOST "rm -rf /tmp/watchparty-deploy && mkdir -p /tmp/watchparty-deploy"
-          
-          # Upload files with progress
-          echo "📤 Uploading deployment files..."
-          echo "Files being uploaded:"
-          ls -la deployment-package/
-          echo "Checking for .env.generated specifically:"
-          ls -la deployment-package/.env.generated || echo ".env.generated not found in deployment-package"
-          scp -o StrictHostKeyChecking=no -r deployment-package/* $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
-          # Ensure .env.generated is uploaded separately if it exists
-          if [[ -f deployment-package/.env.generated ]]; then
-            echo "📤 Explicitly uploading .env.generated..."
-            scp -o StrictHostKeyChecking=no deployment-package/.env.generated $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
-          fi
-          scp -o StrictHostKeyChecking=no ci_remote_deploy.sh $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
-          
-          # Execute deployment with timeout
-          echo "⚙️ Executing remote deployment script..."
-          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "
-            cd /tmp/watchparty-deploy
-            echo '📋 Files received on server:'
-            ls -la
-            echo '📋 Checking for environment files:'
-            echo 'Looking for .env.generated:'
-            if [[ -f .env.generated ]]; then
-              echo '✅ .env.generated found with $(wc -l < .env.generated) lines'
-              echo 'First few lines (sanitized):'
-              head -3 .env.generated | sed 's/=.*/=***/' || true
-            else
-              echo '❌ .env.generated not found!'
-            fi
-            echo 'Looking for other env files:'
-            ls -la .env* 2>/dev/null || echo 'No .env* files found'
-            timeout 1200 bash -x ./ci_remote_deploy.sh
-          " || {
-            echo "❌ Deployment script failed or timed out"
-            echo "🔍 Checking for any error logs..."
-            ssh $SERVER_USER@$SERVER_HOST "tail -50 /var/log/watchparty/error.log 2>/dev/null || echo 'No Gunicorn error log found yet'; tail -50 /var/log/watchparty/django_errors.log 2>/dev/null || echo 'No Django error log found yet'"
-            exit 1
-          }
-          
-          echo "✅ Remote deployment completed successfully"
-      - name: Post-deployment verification
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-        run: |
-          echo "🔍 Running post-deployment verification..."
-          
-          # Wait a moment for services to stabilize
+          # Wait for services to start
           sleep 10
           
-          # Check service status with comprehensive diagnostics
-          echo "Checking systemd services..."
-          ssh $SERVER_USER@$SERVER_HOST "
-            echo '=== Gunicorn Service Status ==='
-            sudo systemctl status watchparty-gunicorn --no-pager -l || true
-            echo
-            echo '=== Service Process Info ==='
-            if sudo systemctl is-active --quiet watchparty-gunicorn; then
-              PID=\$(sudo systemctl show watchparty-gunicorn --property=MainPID --value)
-              if [[ \"\$PID\" != \"0\" ]]; then
-                echo \"Main PID: \$PID\"
-                ps -p \"\$PID\" -o pid,ppid,user,cmd || true
-                echo \"Process listening on ports:\"
-                ss -tlnp | grep \"\$PID\" || echo 'No ports found for this PID'
-              fi
+          # Check if Django is responding
+          if curl -f -s http://localhost:8000/health/ > /dev/null; then
+            echo '✅ Django application is responding'
+          else
+            echo '⚠️ Django application health check failed'
+            ./manage.sh prod-logs --tail 50
+          fi
+          
+          # Check nginx if configured
+          if sudo systemctl is-active --quiet nginx; then
+            echo '✅ Nginx is running'
+            if curl -f -s http://localhost/ > /dev/null; then
+              echo '✅ Nginx is serving content'
             else
-              echo 'Service is not active'
+              echo '⚠️ Nginx is not serving content properly'
             fi
-            echo
-            echo '=== Port 8000 Status ==='
-            if ss -tlnp | grep :8000; then
-              echo 'Port 8000 is in use'
-            else
-              echo 'Port 8000 is not in use'
-            fi
-            echo
-            echo '=== Recent Service Logs ==='
-            sudo journalctl -u watchparty-gunicorn --no-pager -n 20 || true
-            echo
-            echo '=== Application Logs ==='
-            tail -10 /var/log/watchparty/error.log 2>/dev/null || echo 'No Gunicorn error log found'
-            tail -10 /var/log/watchparty/access.log 2>/dev/null || echo 'No Gunicorn access log found'
-            tail -10 /var/log/watchparty/django_errors.log 2>/dev/null || echo 'No Django error log found'
-            echo '=== Project-level logs (backup) ==='
-            tail -5 /var/www/watch-party-backend/logs/django.log 2>/dev/null || echo 'No project-level Django log found'
-            echo
-            echo '=== System Resources ==='
-            echo \"Memory: \$(free -h | grep 'Mem:' | awk '{print \$7 \" available of \" \$2}')\"
-            echo \"Disk: \$(df -h /var/www/watch-party-backend | tail -1 | awk '{print \$4 \" available\"}')\\"
-            echo \"Load: \$(uptime | awk -F'load average:' '{print \$2}')\"
-            echo
-            echo '=== Nginx Service Status ==='
-            sudo systemctl status nginx --no-pager -l || true
-          "
-          
-          # Test endpoints with detailed error reporting
-          echo "Testing application endpoints..."
-          
-          # Test direct application
-          if ssh $SERVER_USER@$SERVER_HOST "curl -f -m 15 -w 'HTTP %{http_code} in %{time_total}s\n' http://127.0.0.1:8000/health/ >/dev/null 2>&1"; then
-            echo "✅ Direct application health check passed"
           else
-            echo "⚠️ Direct application health check failed"
-            ssh $SERVER_USER@$SERVER_HOST "
-              echo 'Attempting detailed health check...'
-              curl -v -m 15 http://127.0.0.1:8000/health/ 2>&1 || true
-              echo
-              echo 'Checking if anything is listening on port 8000:'
-              ss -tlnp | grep :8000 || echo 'Nothing listening on port 8000'
-            "
+            echo 'ℹ️ Nginx not configured or not running'
           fi
-          
-          # Test through nginx proxy
-          if ssh $SERVER_USER@$SERVER_HOST "curl -f -m 15 -w 'HTTP %{http_code} in %{time_total}s\n' http://127.0.0.1/health/ >/dev/null 2>&1"; then
-            echo "✅ Nginx proxy health check passed"
-          else
-            echo "⚠️ Nginx proxy health check failed"
-            ssh $SERVER_USER@$SERVER_HOST "
-              echo 'Checking Nginx configuration...'
-              sudo nginx -t || true
-              echo 'Checking Nginx error logs...'
-              tail -10 /var/log/nginx/error.log 2>/dev/null || echo 'No Nginx error log found'
-            "
-          fi
-          
-          # Run diagnostic script if service failed
-          ssh $SERVER_USER@$SERVER_HOST "
-            if ! sudo systemctl is-active --quiet watchparty-gunicorn; then
-              echo '=== Running Gunicorn Diagnostics ==='
-              if [[ -f /var/www/watch-party-backend/scripts/diagnose-gunicorn.sh ]]; then
-                sudo /var/www/watch-party-backend/scripts/diagnose-gunicorn.sh 2>&1 | head -100
-              else
-                echo 'Diagnostic script not found'
-              fi
-            fi
-          "
-      - name: Notify deployment status
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment completed successfully"
-          else
-            echo "❌ Deployment failed"
-          fi
-  cleanup:
-    needs: [deploy]
+        "
+    
+    - name: 📊 Deployment summary
+      if: always()
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment Type**: $DEPLOYMENT_TYPE" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Server**: $DEPLOY_HOST" >> $GITHUB_STEP_SUMMARY
+        echo "- **User**: $DEPLOY_USER" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployed at**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ **Status**: Deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Status**: Deployment failed!" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "- Monitor application logs: \`./manage.sh prod-logs\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Check service status: \`./manage.sh prod-status\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Run health checks: \`./manage.sh check\`" >> $GITHUB_STEP_SUMMARY
+
+  # Notify on failure
+  notify-failure:
     runs-on: ubuntu-latest
-    if: always()
+    needs: [deploy]
+    if: failure()
+    
     steps:
-      - name: Cleanup
-        run: |
-          echo "Workflow finished for commit ${{ github.sha }}"
+    - name: 📧 Notify deployment failure
+      run: |
+        echo "❌ Deployment failed!"
+        echo "Please check the workflow logs and server status."
+        # Add notification logic here (email, Slack, etc.)

@@ -173,6 +173,8 @@ show_help() {
     echo -e "  ${MAGENTA}server-update${NC}         Update server configuration"
     echo -e "  ${MAGENTA}nginx-config${NC}          Configure Nginx"
     echo -e "  ${MAGENTA}ssl-setup${NC}             Setup SSL certificates"
+    echo -e "  ${MAGENTA}verify-deployment${NC}     Verify successful deployment"
+    echo -e "  ${MAGENTA}github-setup${NC}          Setup GitHub Actions secrets"
     echo
     echo -e "${WHITE}PRODUCTION MANAGEMENT:${NC}"
     echo -e "  ${CYAN}prod-setup${NC}             Complete production server setup (uses unified .env or .env.production)"
@@ -416,6 +418,15 @@ cmd_fix_env() {
     execute_script "$SCRIPTS_DIR/env-validator.sh" "fix" "$@"
 }
 
+# New deployment and verification commands
+cmd_verify_deployment() {
+    execute_script "$SCRIPTS_DIR/verify-deployment.sh" "$@"
+}
+
+cmd_github_setup() {
+    execute_script "$SCRIPTS_DIR/github-actions-setup.sh" "$@"
+}
+
 # Backup and maintenance commands
 cmd_backup() {
     execute_script "$SCRIPTS_DIR/backup.sh" "backup" "$@"
@@ -562,6 +573,8 @@ main() {
         server-update)          cmd_server_update "$@" ;;
         nginx-config|nginx)     cmd_nginx_config "$@" ;;
         ssl-setup|ssl)          cmd_ssl_setup "$@" ;;
+        verify-deployment|verify) cmd_verify_deployment "$@" ;;
+        github-setup|gh-setup)  cmd_github_setup "$@" ;;
         
         # Production management
         prod)                   cmd_prod "$@" ;;
