@@ -60,6 +60,7 @@ google-resumable-media==2.7.2
 googleapis-common-protos==1.70.0
 grpcio==1.74.0
 grpcio-status==1.74.0
+gevent==24.2.1
 gunicorn==23.0.0
 httplib2==0.22.0
 hyperlink==21.0.0

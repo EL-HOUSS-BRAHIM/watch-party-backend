@@ -178,6 +178,11 @@ jobs:
           CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
           CHANNEL_LAYERS_CONFIG_HOSTS: ${{ secrets.CHANNEL_LAYERS_CONFIG_HOSTS }}
           DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+          EMAIL_USE_TLS: ${{ secrets.EMAIL_USE_TLS }}
+          EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+          EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
         run: |
           OUT=deployment-package/.env.generated
           : > "$OUT"
@@ -191,11 +196,31 @@ jobs:
           echo "CELERY_RESULT_BACKEND=$CELERY_RESULT_BACKEND" >> "$OUT"
           echo "CHANNEL_LAYERS_CONFIG_HOSTS=$CHANNEL_LAYERS_CONFIG_HOSTS" >> "$OUT"
           echo "DEFAULT_FROM_EMAIL=$DEFAULT_FROM_EMAIL" >> "$OUT"
+          # Email configuration (with fallbacks)
+          if [[ -n "${EMAIL_HOST:-}" ]]; then 
+            echo "EMAIL_HOST=$EMAIL_HOST" >> "$OUT"
+          else
+            echo "EMAIL_HOST=smtp.gmail.com" >> "$OUT"
+          fi
+          if [[ -n "${EMAIL_PORT:-}" ]]; then 
+            echo "EMAIL_PORT=$EMAIL_PORT" >> "$OUT"
+          else
+            echo "EMAIL_PORT=587" >> "$OUT"
+          fi
+          if [[ -n "${EMAIL_USE_TLS:-}" ]]; then 
+            echo "EMAIL_USE_TLS=$EMAIL_USE_TLS" >> "$OUT"
+          else
+            echo "EMAIL_USE_TLS=True" >> "$OUT"
+          fi
+          if [[ -n "${EMAIL_HOST_USER:-}" ]]; then echo "EMAIL_HOST_USER=$EMAIL_HOST_USER" >> "$OUT"; fi
+          if [[ -n "${EMAIL_HOST_PASSWORD:-}" ]]; then echo "EMAIL_HOST_PASSWORD=$EMAIL_HOST_PASSWORD" >> "$OUT"; fi
           if [[ -n "${SENTRY_DSN:-}" ]]; then echo "SENTRY_DSN=$SENTRY_DSN" >> "$OUT"; fi
           echo "ENVIRONMENT=production" >> "$OUT"
           echo "DEBUG=False" >> "$OUT"
           echo "RATE_LIMIT_ENABLED=True" >> "$OUT"
           echo "✅ Generated .env.generated with $(wc -l < "$OUT") environment variables"
+          echo "📋 Environment variables included:"
+          grep -E '^[A-Z_]+=.*$' "$OUT" | cut -d'=' -f1 | sort
           ls -la deployment-package/.env.generated
       - name: Prepare remote deploy script
         env:
@@ -327,7 +352,15 @@ jobs:
           fi
 
           echo "📦 Installing Python dependencies as $SERVICE_USER"
-          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -m ensurepip --upgrade || true && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt && pip install gunicorn gevent'
+          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -m ensurepip --upgrade || true && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt'
+          # Verify gevent installation specifically since it's critical for Gunicorn worker
+          echo "🔍 Verifying gevent installation..."
+          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -c "import gevent; print(f\"Gevent version: {gevent.__version__}\")"' || {
+            echo "⚠️ Gevent not found, installing explicitly..."
+            sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && pip install gevent>=24.0.0'
+          }
+          # Ensure gunicorn is available
+          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && pip show gunicorn || pip install gunicorn>=23.0.0'
 
           echo "🗄 Running migrations & collectstatic"
           # Ensure logs directory exists before Django operations (matching Django settings)
@@ -475,6 +508,15 @@ jobs:
           sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && python manage.py check --deploy" || {
             echo "❌ Django configuration check failed"
             # Don't exit - this might be non-critical
+          }
+          
+          # Test critical module imports
+          echo "🧪 Testing critical module imports..."
+          sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && python -c 'import gevent; import gunicorn; import django; print(\"✅ All critical modules imported successfully\")'" || {
+            echo "❌ Critical module import test failed"
+            echo "Checking installed packages..."
+            sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && pip list | grep -E '(gevent|gunicorn|django)'"
+            exit 1
           }
 
           # Start the service with comprehensive error handling
