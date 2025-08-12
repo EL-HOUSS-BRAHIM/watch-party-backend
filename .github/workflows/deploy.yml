@@ -241,14 +241,16 @@ jobs:
           # Directory setup & ownership BEFORE rsync
           sudo mkdir -p "$DEPLOY_DIR" /var/log/watchparty
           sudo chown -R $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR" /var/log/watchparty
-          # Ensure application log directory exists
-          sudo mkdir -p "$DEPLOY_DIR/logs"
-          sudo touch "$DEPLOY_DIR/logs/django.log"
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR/logs"
-          sudo chmod 664 "$DEPLOY_DIR/logs/django.log" || true
 
           echo "📤 Syncing project files to $DEPLOY_DIR";
           sudo rsync -av --delete --exclude='venv' --exclude='.env' --chown=$SERVICE_USER:$SERVICE_GROUP ./ "$DEPLOY_DIR/"
+
+          # Ensure application log directory exists AFTER rsync (matching Django settings)
+          sudo mkdir -p /var/log/watchparty
+          sudo touch /var/log/watchparty/django.log
+          sudo touch /var/log/watchparty/django_errors.log
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty
+          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log || true
 
           # Place env file if provided
           if [[ -f ./.env.generated && ! -f "$DEPLOY_DIR/.env" ]]; then
@@ -291,6 +293,12 @@ jobs:
           sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -m ensurepip --upgrade || true && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt && pip install gunicorn gevent'
 
           echo "🗄 Running migrations & collectstatic"
+          # Ensure logs directory exists before Django operations (matching Django settings)
+          sudo mkdir -p /var/log/watchparty
+          sudo touch /var/log/watchparty/django.log
+          sudo touch /var/log/watchparty/django_errors.log
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty
+          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log || true
           sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python manage.py migrate --noinput || true && python manage.py collectstatic --noinput || true'
 
           # Systemd service creation (idempotent)
@@ -320,6 +328,13 @@ jobs:
             sudo systemctl daemon-reload
             sudo systemctl enable watchparty-gunicorn
           fi
+
+          # Final check - ensure logs directory exists before starting service
+          sudo mkdir -p /var/log/watchparty
+          sudo touch /var/log/watchparty/django.log
+          sudo touch /var/log/watchparty/django_errors.log
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty
+          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log || true
 
           sudo systemctl restart watchparty-gunicorn || sudo systemctl start watchparty-gunicorn
 
@@ -361,7 +376,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "cd /tmp/watchparty-deploy && timeout 1200 bash -x ./ci_remote_deploy.sh" || {
             echo "❌ Deployment script failed or timed out"
             echo "🔍 Checking for any error logs..."
-            ssh $SERVER_USER@$SERVER_HOST "tail -50 /var/log/watchparty/error.log 2>/dev/null || echo 'No error log found yet'"
+            ssh $SERVER_USER@$SERVER_HOST "tail -50 /var/log/watchparty/error.log 2>/dev/null || echo 'No Gunicorn error log found yet'; tail -50 /var/log/watchparty/django_errors.log 2>/dev/null || echo 'No Django error log found yet'"
             exit 1
           }
           
@@ -386,7 +401,8 @@ jobs:
             sudo systemctl status nginx --no-pager -l || true
             echo
             echo '=== Recent Logs ==='
-            tail -20 /var/log/watchparty/error.log 2>/dev/null || echo 'No error log found'
+            tail -20 /var/log/watchparty/error.log 2>/dev/null || echo 'No Gunicorn error log found'
+            tail -20 /var/log/watchparty/django_errors.log 2>/dev/null || echo 'No Django error log found'
           "
           
           # Test endpoints
