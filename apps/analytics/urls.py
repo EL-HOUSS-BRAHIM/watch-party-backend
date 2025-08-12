@@ -6,12 +6,12 @@ from .advanced_views import (
 )
 from . import dashboard_views
 from .views_advanced import (
-    platform_overview_analytics, user_behavior_analytics, 
+    PlatformOverviewAnalyticsView, user_behavior_analytics, 
     content_performance_analytics, revenue_analytics,
     user_personal_analytics, real_time_analytics,
     # Enhanced Analytics (Task 11)
     video_detailed_analytics, user_behavior_detailed,
-    real_time_analytics, predictive_analytics, comparative_analytics
+    predictive_analytics, comparative_analytics, real_time_dashboard_analytics
 )
 
 app_name = 'analytics'
@@ -43,7 +43,7 @@ urlpatterns = [
     path('predictive/', PredictiveAnalyticsView.as_view(), name='predictive-analytics'),
     
     # Latest Advanced Analytics Endpoints
-    path('platform-overview/', platform_overview_analytics, name='platform_overview'),
+    path('platform-overview/', PlatformOverviewAnalyticsView.as_view(), name='platform_overview'),
     path('user-behavior/', user_behavior_analytics, name='user_behavior'),
     path('content-performance/', content_performance_analytics, name='content_performance'),
     path('revenue-advanced/', revenue_analytics, name='revenue_analytics_advanced'),
@@ -53,7 +53,7 @@ urlpatterns = [
     # Enhanced Analytics Features (Task 11)
     path('video/<uuid:video_id>/analytics/', video_detailed_analytics, name='video_detailed_analytics'),
     path('user-behavior/detailed/', user_behavior_detailed, name='user_behavior_detailed'),
-    path('real-time/dashboard/', real_time_analytics, name='real_time_dashboard'),
+    path('real-time/dashboard/', real_time_dashboard_analytics, name='real_time_dashboard'),
     path('predictive/forecast/', predictive_analytics, name='predictive_forecast'),
     path('comparative/', comparative_analytics, name='comparative_analytics'),
 ]

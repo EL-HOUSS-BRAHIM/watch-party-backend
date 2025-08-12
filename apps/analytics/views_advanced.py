@@ -1039,8 +1039,8 @@ def user_behavior_detailed(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def real_time_analytics(request):
-    """Get real-time analytics data"""
+def real_time_dashboard_analytics(request):
+    """Get real-time analytics data for dashboard"""
     try:
         # Live metrics (last 5 minutes)
         five_minutes_ago = timezone.now() - timedelta(minutes=5)
