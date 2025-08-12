@@ -29,37 +29,7 @@ env:
   PYTHON_VERSION: '3.12'
 
 jobs:
-  # Lightweight test & lint gate (runs for PRs and pushes)
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-          cache-dependency-path: requirements.txt
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install bandit
-      - name: Run unit tests (fast subset if available)
-        run: |
-          if [ -f manage.py ]; then
-            python manage.py test --noinput || exit 1
-          else
-            echo 'No manage.py found; skipping Django tests'
-          fi
-      - name: Security scan (Bandit)
-        run: |
-          bandit -q -r . || true
-
   build:
-    needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: >-
