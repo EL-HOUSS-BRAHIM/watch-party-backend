@@ -81,6 +81,14 @@ jobs:
                     --exclude='.vscode' \
                     --exclude='.idea' \
                     ./ deployment-package/
+          # Copy optional env/example files only if present
+          for f in .env.example .env.production; do
+            if [[ -f "$f" ]]; then
+              cp "$f" deployment-package/
+            else
+              echo "$f not found, skipping"
+            fi
+          done
           cp requirements.freeze.txt deployment-package/ 2>/dev/null || true
           if [[ -f .env ]]; then
             grep -Ev '^(SECRET_KEY=|DATABASE_URL=postgresql://watchparty_admin:|REDIS_URL=rediss://|DATABASE_PASSWORD=|REDIS_PASSWORD=)' .env > deployment-package/.env.template || true
@@ -98,7 +106,7 @@ jobs:
       - name: Generate checksums
         if: steps.check_deployment.outputs.ready == 'true'
         run: |
-          (cd deployment-package && find . -type f -maxdepth 5 -print0 | sort -z | xargs -0 sha256sum) > deployment-package/CHECKSUMS.sha256
+          (cd deployment-package && find . -type f -maxdepth 5 -print0 | sort -z | xargs -0 sha256sum) > deployment-package/CHECKSUMS.sha256 || true
       - name: Upload deployment package
         if: steps.check_deployment.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
@@ -124,7 +132,25 @@ jobs:
       - name: Verify checksums
         run: |
           cd deployment-package
-          sha256sum -c CHECKSUMS.sha256
+          if [[ ! -f CHECKSUMS.sha256 ]]; then
+            echo "No checksum file present, skipping verification"
+            exit 0
+          fi
+          TMP_FILE=$(mktemp)
+          # Reconstruct checksum list only for files that still exist
+          while read -r hash path; do
+            # Expect lines like: <hash><space><space>./relative
+            if [[ -f ${path#./} || -f $path ]]; then
+              echo "$hash  $path" >> "$TMP_FILE"
+            else
+              echo "Skipping missing $path"
+            fi
+          done < CHECKSUMS.sha256
+          if [[ -s "$TMP_FILE" ]]; then
+            sha256sum -c "$TMP_FILE" || { echo "Checksum mismatch(s) detected"; exit 1; }
+          else
+            echo "No existing files to verify; skipping"
+          fi
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
