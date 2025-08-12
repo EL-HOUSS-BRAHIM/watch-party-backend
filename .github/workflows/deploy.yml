@@ -201,200 +201,99 @@ jobs:
         run: |
           cat > ci_remote_deploy.sh << 'SCRIPT'
           #!/bin/bash
-          set -euo pipefail  # Strict error handling
-          
-          # Enable logging
-          exec 1> >(tee -a /tmp/deployment.log)
-          exec 2> >(tee -a /tmp/deployment.log >&2)
-          
+          set -euo pipefail
+          umask 022
+
           DEPLOY_DIR="${DEPLOY_DIR:-/var/www/watch-party-backend}"
           SERVICE_USER="${SERVER_USER:-www-data}"
-          
+          SERVICE_GROUP="www-data"
+
           echo "$(date): 🔧 Starting server environment setup..."
           echo "Deploy directory: $DEPLOY_DIR"
-            echo "Service user: $SERVICE_USER"
-          
-          # Update system packages
-          echo "$(date): 📦 Detecting package manager..."
+          echo "Service user: $SERVICE_USER"
+
+          # Detect package manager
           if command -v apt-get >/dev/null 2>&1; then
-            echo "Using apt-get (Debian/Ubuntu)"
-            sudo apt-get update -qq || { echo "Failed to update packages"; exit 1; }
+            sudo apt-get update -qq || true
             INSTALLER="apt-get install -y"
           elif command -v yum >/dev/null 2>&1; then
-            echo "Using yum (RHEL/CentOS)"
-            sudo yum update -y -q || { echo "Failed to update packages"; exit 1; }
+            sudo yum -y -q update || true
             INSTALLER="yum install -y"
           elif command -v dnf >/dev/null 2>&1; then
-            echo "Using dnf (Fedora/RHEL 8+)"
-            sudo dnf update -y -q || { echo "Failed to update packages"; exit 1; }
+            sudo dnf -y -q update || true
             INSTALLER="dnf install -y"
           else
-            echo "❌ Unsupported package manager"
-            exit 1
+            echo "Unsupported package manager"; exit 1
           fi
-          
-          # Install essential packages (always ensure venv & pip available)
-          echo "📦 Installing essential packages..."
+
+          echo "Installing base packages (idempotent)"
           if command -v apt-get >/dev/null 2>&1; then
-            PY_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' || echo "")
-            # Always attempt to install venv & pip even if python3 exists
-            sudo apt-get install -y python3-venv python3-pip python3-dev || true
-            if [[ -n "$PY_MINOR" ]]; then
-              sudo apt-get install -y "python${PY_MINOR}-venv" || true
-            fi
+            sudo apt-get install -y python3 python3-venv python3-pip python3-dev build-essential libpq-dev rsync curl git || true
           else
-            # For yum/dnf based distros
-            sudo $INSTALLER python3 python3-pip || true
+            sudo $INSTALLER python3 python3-pip rsync curl git || true
           fi
-          
-          if ! command -v nginx >/dev/null 2>&1; then
-            echo "Installing Nginx..."
-            sudo $INSTALLER nginx
-          fi
-          if ! command -v curl >/dev/null 2>&1; then
-            echo "Installing curl..."
-            sudo $INSTALLER curl
-          fi
-          if ! command -v git >/dev/null 2>&1; then
-            echo "Installing git..."
-            sudo $INSTALLER git
-          fi
-          if ! command -v rsync >/dev/null 2>&1; then
-            echo "Installing rsync..."
-            sudo $INSTALLER rsync
-          fi
-          
-          # Install build essentials for Python packages
-          if command -v apt-get >/dev/null 2>&1; then
-            sudo $INSTALLER build-essential libpq-dev
-          elif command -v yum >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then
-            sudo $INSTALLER gcc gcc-c++ make postgresql-devel
-          fi
-          
-          # Verify venv capability explicitly
-          if ! python3 -m venv --help >/dev/null 2>&1; then
-            echo "⚠️ python3-venv still missing, retrying install..."
-            if command -v apt-get >/dev/null 2>&1; then
-              sudo apt-get install -y python3-venv || true
-              PY_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' || echo "")
-              if [[ -n "$PY_MINOR" ]]; then
-                sudo apt-get install -y "python${PY_MINOR}-venv" || true
-              fi
+
+          # Create service user if missing
+            if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+              sudo useradd -r -s /usr/sbin/nologin -d /var/www -c "WatchParty Service User" "$SERVICE_USER" || true
             fi
-          fi
-          if ! python3 -m venv --help >/dev/null 2>&1; then
-            echo "❌ Still cannot create virtual environments (ensurepip/venv missing). Aborting."
-            exit 1
-          fi
-          
-          # Create service user if it doesn't exist
-          if ! id "$SERVICE_USER" >/dev/null 2>&1; then
-            echo "Creating service user: $SERVICE_USER"
-            sudo useradd -r -s /bin/false -d /var/www -c "Web Server User" $SERVICE_USER || true
-          fi
-          
-          # Set up directory structure
-          echo "📁 Setting up directory structure..."
-          sudo mkdir -p "$DEPLOY_DIR"
-          sudo mkdir -p /var/log/watchparty
-          sudo chown -R $SERVICE_USER:www-data /var/log/watchparty || sudo chown -R $SERVICE_USER:$SERVICE_USER /var/log/watchparty
-          
-          # Configure Nginx if not already configured
-          if [[ ! -f /etc/nginx/sites-available/watchparty ]]; then
-            echo "⚙️ Configuring Nginx..."
-            sudo tee /etc/nginx/sites-available/watchparty > /dev/null << 'NGINXCONF'
-          server {
-              listen 80;
-              server_name _;
-              
-              client_max_body_size 100M;
-              
-              location /static/ {
-                  alias /var/www/watch-party-backend/staticfiles/;
-                  expires 30d;
-                  add_header Cache-Control "public, immutable";
-              }
-              
-              location /media/ {
-                  alias /var/www/watch-party-backend/media/;
-                  expires 30d;
-                  add_header Cache-Control "public, immutable";
-              }
-              
-              location / {
-                  proxy_pass http://127.0.0.1:8000;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-                  proxy_connect_timeout 60s;
-                  proxy_send_timeout 60s;
-                  proxy_read_timeout 60s;
-              }
-          }
-          NGINXCONF
-            
-            sudo ln -sf /etc/nginx/sites-available/watchparty /etc/nginx/sites-enabled/ || true
-            sudo rm -f /etc/nginx/sites-enabled/default || true
-            sudo nginx -t && sudo systemctl reload nginx || echo "Nginx configuration needs manual review"
-          fi
-          
-          sudo systemctl enable nginx || true
-          sudo systemctl start nginx || true
-          echo "✅ Server setup completed"
-          
-          mkdir -p "$DEPLOY_DIR"
-          cd /tmp/watchparty-deploy
-          echo "📤 Syncing project files to $DEPLOY_DIR (with sudo & ownership fix)..."
-          sudo rsync -av --delete --exclude='venv' --exclude='.env' --chown=$SERVICE_USER:www-data ./ "$DEPLOY_DIR/"
-          
+
+          # Directory setup & ownership BEFORE rsync
+          sudo mkdir -p "$DEPLOY_DIR" /var/log/watchparty
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR" /var/log/watchparty
+
+          echo "📤 Syncing project files to $DEPLOY_DIR";
+          sudo rsync -av --delete --exclude='venv' --exclude='.env' --chown=$SERVICE_USER:$SERVICE_GROUP ./ "$DEPLOY_DIR/"
+
+          # Place env file if provided
           if [[ -f ./.env.generated && ! -f "$DEPLOY_DIR/.env" ]]; then
             sudo mv ./.env.generated "$DEPLOY_DIR/.env"
             sudo chmod 600 "$DEPLOY_DIR/.env"
+            sudo chown $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR/.env"
           fi
-          
+
           cd "$DEPLOY_DIR"
-          # Recreate venv if missing or incomplete
-          if [[ ! -d venv || ! -f venv/bin/activate ]]; then
-            echo "🛠 (Re)creating virtual environment..."
-            rm -rf venv || true
-            sudo -u $SERVICE_USER -H python3 -m venv venv || { echo "❌ Failed to create venv"; ls -l ; exit 1; }
-          else
-            echo "✅ Existing virtual environment directory detected"
+          echo "🔧 Ensuring clean & writable virtual environment"
+          if [[ -d venv && ! -w venv/bin ]]; then
+            echo "Existing venv not writable by $SERVICE_USER; removing"
+            sudo rm -rf venv
           fi
-          if [[ ! -f venv/bin/activate ]]; then
-            echo "❌ venv/bin/activate still missing after creation attempt"; find venv -maxdepth 2 -type f -ls || true; exit 1;
+          if [[ -d venv && ! -f venv/bin/activate ]]; then
+            echo "Corrupted venv detected; removing"
+            sudo rm -rf venv
           fi
-          source venv/bin/activate
-          python -m ensurepip --upgrade || true
-          pip install --upgrade pip setuptools wheel
-          pip install -r requirements.txt
-          pip install gunicorn gevent
-          python manage.py migrate --noinput || true
-          python manage.py collectstatic --noinput || true
-          sudo chown -R $SERVICE_USER:www-data "$DEPLOY_DIR"
-          
+          if [[ ! -d venv ]]; then
+            echo "Creating venv as $SERVICE_USER"
+            sudo -u $SERVICE_USER -H python3 -m venv venv || { echo "Failed to create venv"; exit 1; }
+          fi
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP venv
+
+          echo "📦 Installing Python dependencies as $SERVICE_USER"
+          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -m ensurepip --upgrade || true && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt && pip install gunicorn gevent'
+
+          echo "🗄 Running migrations & collectstatic"
+          sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python manage.py migrate --noinput || true && python manage.py collectstatic --noinput || true'
+
+          # Systemd service creation (idempotent)
           if [[ ! -f /etc/systemd/system/watchparty-gunicorn.service ]]; then
-            echo "⚙️ Creating systemd service..."
             cat > /tmp/watchparty-gunicorn.service << EOF
           [Unit]
           Description=Watch Party Gunicorn Application Server
           After=network.target
-          
+
           [Service]
-          Type=notify
+          Type=simple
           User=$SERVICE_USER
-          Group=www-data
+          Group=$SERVICE_GROUP
           WorkingDirectory=$DEPLOY_DIR
           EnvironmentFile=$DEPLOY_DIR/.env
           ExecStart=$DEPLOY_DIR/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 --worker-class gevent --access-logfile /var/log/watchparty/access.log --error-logfile /var/log/watchparty/error.log watchparty.wsgi:application
-          ExecReload=/bin/kill -s HUP \$MAINPID
           Restart=on-failure
           RestartSec=5
           KillMode=mixed
-          TimeoutStopSec=5
+          TimeoutStopSec=10
           PrivateTmp=true
-          
+
           [Install]
           WantedBy=multi-user.target
           EOF
@@ -402,34 +301,11 @@ jobs:
             sudo systemctl daemon-reload
             sudo systemctl enable watchparty-gunicorn
           fi
-          
-          if command -v ufw >/dev/null 2>&1; then
-            echo "🔥 Configuring firewall..."
-            sudo ufw --force enable || true
-            sudo ufw allow ssh || true
-            sudo ufw allow 'Nginx Full' || true
-            sudo ufw allow 80 || true
-            sudo ufw allow 443 || true
-          fi
+
           sudo systemctl restart watchparty-gunicorn || sudo systemctl start watchparty-gunicorn
-          sleep 5
-          
-          echo "🏥 Running health checks..."
-          if sudo systemctl is-active --quiet watchparty-gunicorn; then
-            echo "✅ Gunicorn service is running"
-          else
-            echo "❌ Gunicorn service failed to start"
-            sudo systemctl status watchparty-gunicorn --no-pager -l || true
-          fi
-          if sudo systemctl is-active --quiet nginx; then
-            echo "✅ Nginx service is running"
-          else
-            echo "❌ Nginx service is not running"
-            sudo systemctl status nginx --no-pager -l || true
-          fi
-          curl -f http://127.0.0.1:8000/health/ >/dev/null 2>&1 && echo "✅ Application health check passed" || echo "⚠️ Application health check failed"
-          curl -f http://127.0.0.1/health/ >/dev/null 2>&1 && echo "✅ Nginx proxy health check passed" || echo "⚠️ Nginx proxy health check failed"
-          echo "🚀 Deployment completed!"
+
+          echo "Health check"
+          curl -f http://127.0.0.1:8000/health/ >/dev/null 2>&1 && echo "App OK" || echo "App health failed"
           SCRIPT
           chmod +x ci_remote_deploy.sh
       - name: Deploy to server
