@@ -168,7 +168,7 @@ jobs:
             sudo $INSTALLER nginx
           fi
           
-          if ! command -v curl >/dev/null 2>&1; then
+            if ! command -v curl >/dev/null 2>&1; then
             echo "Installing curl..."
             sudo $INSTALLER curl
           fi
@@ -200,8 +200,8 @@ jobs:
           echo "📁 Setting up directory structure..."
           sudo mkdir -p "$DEPLOY_DIR"
           sudo mkdir -p /var/log/watchparty
-          sudo chown -R $SERVICE_USER:www-data "$DEPLOY_DIR" || sudo chown -R $SERVICE_USER:$SERVICE_USER "$DEPLOY_DIR"
           sudo chown -R $SERVICE_USER:www-data /var/log/watchparty || sudo chown -R $SERVICE_USER:$SERVICE_USER /var/log/watchparty
+          # Ensure deploy can write; rsync will run with sudo anyway
           
           # Configure Nginx if not already configured
           if [[ ! -f /etc/nginx/sites-available/watchparty ]]; then
@@ -254,19 +254,26 @@ jobs:
           
           mkdir -p "$DEPLOY_DIR"
           cd /tmp/watchparty-deploy
-          rsync -av --exclude='venv' --exclude='.env' ./ "$DEPLOY_DIR/"
+          echo "📤 Syncing project files to $DEPLOY_DIR (with sudo & ownership fix)..."
+          sudo rsync -av --delete --exclude='venv' --exclude='.env' --chown=$SERVICE_USER:www-data ./ "$DEPLOY_DIR/"
+          
           if [[ -f ./.env.generated && ! -f "$DEPLOY_DIR/.env" ]]; then
-            mv ./.env.generated "$DEPLOY_DIR/.env"
-            chmod 600 "$DEPLOY_DIR/.env"
+            sudo mv ./.env.generated "$DEPLOY_DIR/.env"
+            sudo chmod 600 "$DEPLOY_DIR/.env"
           fi
+          
           cd "$DEPLOY_DIR"
-          if [[ ! -d venv ]]; then python3 -m venv venv; fi
+          if [[ ! -d venv ]]; then sudo -u $SERVICE_USER python3 -m venv venv; fi
           source venv/bin/activate
           pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
           pip install gunicorn gevent
           python manage.py migrate --noinput || true
           python manage.py collectstatic --noinput || true
+          
+          # Ensure final ownership (in case virtualenv created as root)
+          sudo chown -R $SERVICE_USER:www-data "$DEPLOY_DIR"
+          
           if [[ ! -f /etc/systemd/system/watchparty-gunicorn.service ]]; then
             echo "⚙️ Creating systemd service..."
             cat > /tmp/watchparty-gunicorn.service << EOF
