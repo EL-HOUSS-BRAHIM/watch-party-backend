@@ -37,6 +37,7 @@ watch-party-backend/
     ├── wipeout.sh        # Destructive operations
     ├── health.sh         # Health checks and monitoring
     ├── monitoring.sh     # System monitoring and logs
+    ├── check-logs.sh     # Log configuration diagnostics
     ├── deployment.sh     # Deployment operations
     └── nginx-config.sh   # Nginx configuration
 ```
@@ -162,6 +163,13 @@ Real-time monitoring and log viewing:
 ./scripts/monitoring.sh processes       # Show running processes
 ./scripts/monitoring.sh performance     # Performance metrics
 ./scripts/monitoring.sh errors 6        # Errors from last 6 hours
+```
+
+### Log Diagnostics Script (`scripts/check-logs.sh`)
+Diagnose logging configuration and troubleshoot issues:
+
+```bash
+./scripts/check-logs.sh                 # Check log configuration and files
 ```
 
 ### Deployment Script (`scripts/deployment.sh`)

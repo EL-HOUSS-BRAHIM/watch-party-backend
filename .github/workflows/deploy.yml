@@ -246,11 +246,20 @@ jobs:
           sudo rsync -av --delete --exclude='venv' --exclude='.env' --chown=$SERVICE_USER:$SERVICE_GROUP ./ "$DEPLOY_DIR/"
 
           # Ensure application log directory exists AFTER rsync (matching Django settings)
-          sudo mkdir -p /var/log/watchparty
+          sudo mkdir -p /var/log/watchparty "$DEPLOY_DIR/logs"
           sudo touch /var/log/watchparty/django.log
           sudo touch /var/log/watchparty/django_errors.log
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty
-          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log || true
+          sudo touch /var/log/watchparty/access.log
+          sudo touch /var/log/watchparty/error.log
+          # Create project-level logs as backup (base settings reference)
+          sudo touch "$DEPLOY_DIR/logs/django.log"
+          sudo touch "$DEPLOY_DIR/logs/security.log"
+          sudo touch "$DEPLOY_DIR/logs/performance.log"
+          # Create symlinks for backward compatibility
+          sudo ln -sf /var/log/watchparty/django.log "$DEPLOY_DIR/logs/django_main.log" 2>/dev/null || true
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty "$DEPLOY_DIR/logs"
+          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log /var/log/watchparty/access.log /var/log/watchparty/error.log || true
+          sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
 
           # Place env file if provided
           if [[ -f ./.env.generated && ! -f "$DEPLOY_DIR/.env" ]]; then
@@ -294,11 +303,18 @@ jobs:
 
           echo "🗄 Running migrations & collectstatic"
           # Ensure logs directory exists before Django operations (matching Django settings)
-          sudo mkdir -p /var/log/watchparty
+          sudo mkdir -p /var/log/watchparty "$DEPLOY_DIR/logs"
           sudo touch /var/log/watchparty/django.log
           sudo touch /var/log/watchparty/django_errors.log
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty
-          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log || true
+          sudo touch /var/log/watchparty/access.log
+          sudo touch /var/log/watchparty/error.log
+          # Create project-level logs as backup (base settings reference)
+          sudo touch "$DEPLOY_DIR/logs/django.log"
+          sudo touch "$DEPLOY_DIR/logs/security.log"
+          sudo touch "$DEPLOY_DIR/logs/performance.log"
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty "$DEPLOY_DIR/logs"
+          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log /var/log/watchparty/access.log /var/log/watchparty/error.log || true
+          sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
           sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python manage.py migrate --noinput || true && python manage.py collectstatic --noinput || true'
 
           # Systemd service creation (idempotent)
@@ -330,11 +346,18 @@ jobs:
           fi
 
           # Final check - ensure logs directory exists before starting service
-          sudo mkdir -p /var/log/watchparty
+          sudo mkdir -p /var/log/watchparty "$DEPLOY_DIR/logs"
           sudo touch /var/log/watchparty/django.log
           sudo touch /var/log/watchparty/django_errors.log
-          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty
-          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log || true
+          sudo touch /var/log/watchparty/access.log
+          sudo touch /var/log/watchparty/error.log
+          # Create project-level logs as backup (base settings reference)
+          sudo touch "$DEPLOY_DIR/logs/django.log"
+          sudo touch "$DEPLOY_DIR/logs/security.log"
+          sudo touch "$DEPLOY_DIR/logs/performance.log"
+          sudo chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty "$DEPLOY_DIR/logs"
+          sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log /var/log/watchparty/access.log /var/log/watchparty/error.log || true
+          sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
 
           sudo systemctl restart watchparty-gunicorn || sudo systemctl start watchparty-gunicorn
 
@@ -403,6 +426,8 @@ jobs:
             echo '=== Recent Logs ==='
             tail -20 /var/log/watchparty/error.log 2>/dev/null || echo 'No Gunicorn error log found'
             tail -20 /var/log/watchparty/django_errors.log 2>/dev/null || echo 'No Django error log found'
+            echo '=== Project-level logs (backup) ==='
+            tail -10 /var/www/watch-party-backend/logs/django.log 2>/dev/null || echo 'No project-level Django log found'
           "
           
           # Test endpoints

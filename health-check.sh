@@ -157,25 +157,43 @@ check_memory() {
 
 # Function to check log file sizes
 check_log_sizes() {
-    local log_dir="$PROJECT_DIR/logs"
+    local project_log_dir="$PROJECT_DIR/logs"
+    local system_log_dir="/var/log/watchparty"
     local large_logs=""
     
-    if [ -d "$log_dir" ]; then
-        # Check for log files larger than 100MB
+    # Check project logs directory
+    if [ -d "$project_log_dir" ]; then
         while IFS= read -r -d '' file; do
             local size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo 0)
             if [ "$size" -gt 104857600 ]; then  # 100MB
                 large_logs="$large_logs $(basename "$file")"
             fi
-        done < <(find "$log_dir" -name "*.log" -print0 2>/dev/null)
-        
-        if [ -z "$large_logs" ]; then
-            print_status "Log File Sizes" "OK" ""
-        else
-            print_status "Log File Sizes" "WARNING" "(Large files:$large_logs)"
-        fi
+        done < <(find "$project_log_dir" -name "*.log" -print0 2>/dev/null)
+    fi
+    
+    # Check system logs directory
+    if [ -d "$system_log_dir" ]; then
+        while IFS= read -r -d '' file; do
+            local size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo 0)
+            if [ "$size" -gt 104857600 ]; then  # 100MB
+                large_logs="$large_logs $(basename "$file")"
+            fi
+        done < <(find "$system_log_dir" -name "*.log" -print0 2>/dev/null)
+    fi
+    
+    if [ -z "$large_logs" ]; then
+        print_status "Log File Sizes" "OK" ""
     else
-        print_status "Log File Sizes" "FAILED" "(Log directory not found)"
+        print_status "Log File Sizes" "WARNING" "(Large files:$large_logs)"
+    fi
+    
+    # Check if log directories exist
+    if [ ! -d "$project_log_dir" ] && [ ! -d "$system_log_dir" ]; then
+        print_status "Log Directories" "FAILED" "(Neither log directory found)"
+    elif [ ! -d "$system_log_dir" ]; then
+        print_status "Log Directories" "WARNING" "(System log directory missing)"
+    else
+        print_status "Log Directories" "OK" ""
     fi
 }
 
