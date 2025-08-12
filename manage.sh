@@ -175,6 +175,7 @@ show_help() {
     echo -e "  ${MAGENTA}ssl-setup${NC}             Setup SSL certificates"
     echo -e "  ${MAGENTA}verify-deployment${NC}     Verify successful deployment"
     echo -e "  ${MAGENTA}github-setup${NC}          Setup GitHub Actions secrets"
+    echo -e "  ${MAGENTA}github-secrets${NC}        Manage GitHub repository secrets"
     echo
     echo -e "${WHITE}PRODUCTION MANAGEMENT:${NC}"
     echo -e "  ${CYAN}prod-setup${NC}             Complete production server setup (uses unified .env or .env.production)"
@@ -427,6 +428,10 @@ cmd_github_setup() {
     execute_script "$SCRIPTS_DIR/github-actions-setup.sh" "$@"
 }
 
+cmd_github_secrets() {
+    execute_script "$SCRIPTS_DIR/set-github-secrets.sh" "$@"
+}
+
 # Backup and maintenance commands
 cmd_backup() {
     execute_script "$SCRIPTS_DIR/backup.sh" "backup" "$@"
@@ -575,6 +580,7 @@ main() {
         ssl-setup|ssl)          cmd_ssl_setup "$@" ;;
         verify-deployment|verify) cmd_verify_deployment "$@" ;;
         github-setup|gh-setup)  cmd_github_setup "$@" ;;
+        github-secrets|gh-secrets) cmd_github_secrets "$@" ;;
         
         # Production management
         prod)                   cmd_prod "$@" ;;
