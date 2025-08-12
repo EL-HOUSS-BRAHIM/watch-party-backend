@@ -278,8 +278,8 @@ jobs:
             sudo -u $SERVICE_USER -H python3 -m venv venv || { echo "Failed to create venv"; exit 1; }
           fi
           sudo chown -R $SERVICE_USER:$SERVICE_GROUP venv || true
-          # Verify site-packages writable
-          sudo -u $SERVICE_USER -H bash -c 'python - <<PY\nimport sys,os,glob;\nsp=[p for p in sys.path if p.endswith("site-packages")];\nsp=sp[0] if sp else "";\nprint("Site-packages:", sp);\nexit(0 if (sp and os.access(sp, os.W_OK)) else 1)\nPY' || { echo "site-packages not writable for $SERVICE_USER"; ls -ld venv/lib/python*/site-packages || true; exit 1; }
+          # Verify site-packages writable (fixed: removed invalid heredoc-in-bash -c usage)
+          sudo -u $SERVICE_USER -H python3 -c "import sys, os; sp=[p for p in sys.path if p.endswith('site-packages')]; sp=sp[0] if sp else ''; print('Site-packages:', sp); raise SystemExit(0 if (sp and os.access(sp, os.W_OK)) else 1)" || { echo "site-packages not writable for $SERVICE_USER"; ls -ld venv/lib/python*/site-packages || true; exit 1; }
 
           echo "📦 Installing Python dependencies as $SERVICE_USER"
           sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python -m ensurepip --upgrade || true && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt && pip install gunicorn gevent'
