@@ -35,6 +35,10 @@ class ContentReportListCreateView(generics.ListCreateAPIView):
         return ContentReportSerializer
     
     def get_queryset(self):
+        # Handle schema generation when there's no user
+        if getattr(self, 'swagger_fake_view', False):
+            return ContentReport.objects.none()
+        
         user = self.request.user
         
         # Admin users can see all reports

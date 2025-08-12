@@ -11,6 +11,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.utils import timezone
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
 from datetime import timedelta
 import secrets
 import urllib.parse
@@ -49,7 +50,9 @@ class RegisterView(RateLimitMixin, APIView):
     
     permission_classes = [AllowAny]
     rate_limit_key = 'auth'
+    serializer_class = UserRegistrationSerializer
     
+    @extend_schema(summary="RegisterView POST")
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
@@ -111,6 +114,7 @@ class LogoutView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="LogoutView POST")
     def post(self, request):
         try:
             refresh_token = request.data.get('refresh_token')
@@ -142,8 +146,10 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 class PasswordChangeView(APIView):
     """Password change endpoint"""
     
+    serializer_class = PasswordChangeSerializer
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="PasswordChangeView POST")
     def post(self, request):
         serializer = PasswordChangeSerializer(
             data=request.data,
@@ -168,9 +174,11 @@ class PasswordChangeView(APIView):
 class ForgotPasswordView(RateLimitMixin, APIView):
     """Forgot password endpoint"""
     
+    serializer_class = PasswordResetRequestSerializer
     permission_classes = [AllowAny]
     rate_limit_key = 'auth'
     
+    @extend_schema(summary="ForgotPasswordView POST")
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
@@ -208,9 +216,11 @@ class ForgotPasswordView(RateLimitMixin, APIView):
 class ResetPasswordView(RateLimitMixin, APIView):
     """Reset password endpoint"""
     
+    serializer_class = PasswordResetSerializer
     permission_classes = [AllowAny]
     rate_limit_key = 'auth'
     
+    @extend_schema(summary="ResetPasswordView POST")
     def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
         if serializer.is_valid():
@@ -240,8 +250,10 @@ class ResetPasswordView(RateLimitMixin, APIView):
 class VerifyEmailView(APIView):
     """Email verification endpoint"""
     
+    serializer_class = EmailVerificationSerializer
     permission_classes = [AllowAny]
     
+    @extend_schema(summary="VerifyEmailView POST")
     def post(self, request):
         serializer = EmailVerificationSerializer(data=request.data)
         if serializer.is_valid():
@@ -291,6 +303,7 @@ class ResendVerificationView(RateLimitMixin, APIView):
     permission_classes = [IsAuthenticated]
     rate_limit_key = 'auth'
     
+    @extend_schema(summary="ResendVerificationView POST")
     def post(self, request):
         user = request.user
         

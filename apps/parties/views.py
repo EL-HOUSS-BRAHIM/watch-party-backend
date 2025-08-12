@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
 
 from .models import WatchParty, PartyParticipant, PartyReaction, PartyInvitation, PartyReport
 from apps.chat.models import ChatMessage
@@ -375,6 +376,7 @@ class JoinByCodeView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="JoinByCodeView POST")
     def post(self, request):
         serializer = PartyJoinSerializer(data=request.data)
         if serializer.is_valid():
@@ -400,6 +402,7 @@ class PartySearchView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="PartySearchView GET")
     def get(self, request):
         serializer = PartySearchSerializer(data=request.query_params)
         if serializer.is_valid():

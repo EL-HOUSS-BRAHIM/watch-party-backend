@@ -3,6 +3,7 @@ Admin panel views for Watch Party Backend
 """
 
 from rest_framework import generics, status
+from drf_spectacular.openapi import OpenApiResponse, OpenApiExample
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
@@ -17,6 +18,9 @@ from datetime import timedelta
 from typing import Dict, Any
 import csv
 
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
+
 from core.permissions import IsAdminUser, IsSuperUser
 from core.responses import StandardResponse
 from apps.parties.models import WatchParty
@@ -24,6 +28,12 @@ from apps.videos.models import Video
 from apps.analytics.models import SystemAnalytics, AnalyticsEvent
 from apps.notifications.models import Notification
 from apps.billing.models import Subscription, Payment
+from .serializers import (
+    AdminDashboardStatsSerializer, AdminAnalyticsOverviewSerializer,
+    AdminBroadcastMessageSerializer, AdminBroadcastResponseSerializer,
+    AdminUserActionSerializer, AdminContentModerationSerializer,
+    AdminSystemHealthSerializer, AdminGenericResponseSerializer
+)
 
 User = get_user_model()
 
@@ -32,6 +42,7 @@ class AdminDashboardView(generics.GenericAPIView):
     """Main admin dashboard view"""
     permission_classes = [IsAdminUser]
     
+    @extend_schema(summary="AdminDashboardView GET")
     def get(self, request):
         return admin_dashboard(request)
 
@@ -42,6 +53,11 @@ class AdminPagination(PageNumberPagination):
     max_page_size = 100
 
 
+@extend_schema(
+    summary="Admin Dashboard Stats",
+    description="Get comprehensive admin dashboard statistics",
+    responses={200: AdminDashboardStatsSerializer}
+)
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def admin_dashboard(request):
@@ -534,6 +550,12 @@ def admin_system_logs(request):
     })
 
 
+@extend_schema(
+    summary="Broadcast Message",
+    description="Send a broadcast message to users",
+    request=AdminBroadcastMessageSerializer,
+    responses={200: AdminBroadcastResponseSerializer}
+)
 @api_view(['POST'])
 @permission_classes([IsSuperUser])
 def admin_broadcast_message(request):

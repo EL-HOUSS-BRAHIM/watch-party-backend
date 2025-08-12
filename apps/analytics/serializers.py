@@ -3,13 +3,20 @@ Analytics serializers for Watch Party Backend
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from .models import UserAnalytics, PartyAnalytics, VideoAnalytics, AnalyticsEvent, SystemAnalytics
 
 
 class UserAnalyticsSerializer(serializers.ModelSerializer):
     """User analytics serializer"""
     
-    total_watch_time_hours = serializers.ReadOnlyField()
+    @extend_schema_field(OpenApiTypes.FLOAT)
+    def get_total_watch_time_hours(self, obj) -> float:
+        """Get total watch time in hours"""
+        return obj.total_watch_time_hours
+    
+    total_watch_time_hours = serializers.SerializerMethodField()
     user_name = serializers.CharField(source='user.full_name', read_only=True)
     
     class Meta:
@@ -31,8 +38,18 @@ class UserAnalyticsSerializer(serializers.ModelSerializer):
 class PartyAnalyticsSerializer(serializers.ModelSerializer):
     """Party analytics serializer"""
     
-    engagement_score = serializers.ReadOnlyField()
-    average_session_duration = serializers.ReadOnlyField()
+    @extend_schema_field(OpenApiTypes.FLOAT)
+    def get_engagement_score(self, obj) -> float:
+        """Get party engagement score"""
+        return obj.engagement_score
+    
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_average_session_duration(self, obj) -> str:
+        """Get average session duration as formatted string"""
+        return obj.average_session_duration
+    
+    engagement_score = serializers.SerializerMethodField()
+    average_session_duration = serializers.SerializerMethodField()
     party_title = serializers.CharField(source='party.title', read_only=True)
     
     class Meta:
@@ -133,7 +150,7 @@ class UserEngagementSerializer(serializers.Serializer):
     """User engagement metrics serializer"""
     
     user_id = serializers.UUIDField()
-    username = serializers.CharField()
+    email = serializers.CharField()
     total_sessions = serializers.IntegerField()
     average_session_duration = serializers.FloatField()
     last_active = serializers.DateTimeField()
@@ -282,7 +299,7 @@ class UserChurnPredictionSerializer(serializers.Serializer):
     """User churn prediction serializer"""
     
     user_id = serializers.UUIDField()
-    username = serializers.CharField()
+    email = serializers.CharField()
     churn_probability = serializers.FloatField()
     risk_level = serializers.ChoiceField(choices=['low', 'medium', 'high'])
     key_factors = serializers.ListField()

@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 
 from .models import Friendship, UserActivity, UserSettings
 from .serializers import (
@@ -23,6 +24,7 @@ class DashboardStatsView(APIView):
     """Get dashboard statistics for the user"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="DashboardStatsView GET")
     def get(self, request):
         user = request.user
         
@@ -51,6 +53,7 @@ class UserProfileView(APIView):
     """Get user profile"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserProfileView GET")
     def get(self, request):
         serializer = UserProfileSerializer(
             request.user, context={'request': request}
@@ -62,6 +65,7 @@ class UpdateProfileView(APIView):
     """Update user profile"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UpdateProfileView PUT")
     def put(self, request):
         serializer = UserProfileSerializer(
             request.user, data=request.data, partial=True, 
@@ -90,6 +94,7 @@ class AvatarUploadView(APIView):
     """Upload user avatar"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="AvatarUploadView POST")
     def post(self, request):
         return Response({'message': 'Avatar upload endpoint'})
 
@@ -98,6 +103,7 @@ class FriendsListView(APIView):
     """List user friends"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="FriendsListView GET")
     def get(self, request):
         # Get all accepted friendships where user is either sender or receiver
         friendships = Friendship.objects.filter(
@@ -122,6 +128,7 @@ class FriendRequestsView(APIView):
     """List friend requests"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="FriendRequestsView GET")
     def get(self, request):
         # Get pending friend requests received by the user
         received_requests = Friendship.objects.filter(
@@ -154,6 +161,7 @@ class SendFriendRequestView(APIView):
     """Send friend request"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="SendFriendRequestView POST")
     def post(self, request):
         serializer = SendFriendRequestSerializer(
             data=request.data, context={'request': request}
@@ -193,6 +201,7 @@ class AcceptFriendRequestView(APIView):
     """Accept friend request"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="AcceptFriendRequestView POST")
     def post(self, request, request_id):
         try:
             # Get the friendship request
@@ -244,6 +253,7 @@ class DeclineFriendRequestView(APIView):
     """Decline friend request"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="DeclineFriendRequestView POST")
     def post(self, request, request_id):
         try:
             # Get the friendship request
@@ -271,6 +281,7 @@ class RemoveFriendView(APIView):
     """Remove friend"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="RemoveFriendView POST")
     def post(self, request, friend_id):
         try:
             friend = User.objects.get(id=friend_id)
@@ -314,6 +325,7 @@ class UserSearchView(APIView):
     """Search users"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserSearchView GET")
     def get(self, request):
         query = request.query_params.get('q', '').strip()
         
@@ -351,6 +363,7 @@ class PublicProfileView(APIView):
     """Get public user profile"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="PublicProfileView GET")
     def get(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -411,11 +424,13 @@ class UserSettingsView(APIView):
     """User settings"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserSettingsView GET")
     def get(self, request):
         settings, created = UserSettings.objects.get_or_create(user=request.user)
         serializer = UserSettingsSerializer(settings)
         return Response({'settings': serializer.data})
     
+    @extend_schema(summary="UserSettingsView PUT")
     def put(self, request):
         settings, created = UserSettings.objects.get_or_create(user=request.user)
         serializer = UserSettingsSerializer(settings, data=request.data, partial=True)
@@ -434,6 +449,7 @@ class NotificationSettingsView(APIView):
     """Notification settings"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="NotificationSettingsView GET")
     def get(self, request):
         return Response({'settings': {}})
     
@@ -445,6 +461,7 @@ class PrivacySettingsView(APIView):
     """Privacy settings"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="PrivacySettingsView GET")
     def get(self, request):
         return Response({'settings': {}})
     
@@ -456,6 +473,7 @@ class UserActivityView(APIView):
     """User activity"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserActivityView GET")
     def get(self, request):
         return Response({'activities': []})
 
@@ -464,6 +482,7 @@ class WatchHistoryView(APIView):
     """User watch history"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="WatchHistoryView GET")
     def get(self, request):
         return Response({'history': []})
 
@@ -472,6 +491,7 @@ class FavoritesView(APIView):
     """User favorites"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="FavoritesView GET")
     def get(self, request):
         return Response({'favorites': []})
 
@@ -480,6 +500,7 @@ class AddFavoriteView(APIView):
     """Add favorite"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="AddFavoriteView POST")
     def post(self, request):
         return Response({'message': 'Added to favorites'})
 
@@ -488,6 +509,7 @@ class RemoveFavoriteView(APIView):
     """Remove favorite"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="RemoveFavoriteView POST")
     def post(self, request, favorite_id):
         return Response({'message': 'Removed from favorites'})
 
@@ -496,6 +518,7 @@ class NotificationsView(APIView):
     """User notifications"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="NotificationsView GET")
     def get(self, request):
         return Response({'notifications': []})
 
@@ -504,6 +527,7 @@ class MarkNotificationReadView(APIView):
     """Mark notification as read"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="MarkNotificationReadView POST")
     def post(self, request, notification_id):
         return Response({'message': 'Notification marked as read'})
 
@@ -512,6 +536,7 @@ class MarkAllNotificationsReadView(APIView):
     """Mark all notifications as read"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="MarkAllNotificationsReadView POST")
     def post(self, request):
         return Response({'message': 'All notifications marked as read'})
 
@@ -520,6 +545,7 @@ class UserReportView(APIView):
     """Report user"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserReportView POST")
     def post(self, request):
         return Response({'message': 'User report submitted'})
 
@@ -528,6 +554,7 @@ class BlockUserView(APIView):
     """Block a user"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="BlockUserView POST")
     def post(self, request, user_id):
         try:
             user_to_block = User.objects.get(id=user_id)
@@ -573,6 +600,7 @@ class UnblockUserView(APIView):
     """Unblock a user"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UnblockUserView POST")
     def post(self, request, user_id):
         try:
             user_to_unblock = User.objects.get(id=user_id)
@@ -634,6 +662,7 @@ class ExportUserDataView(APIView):
     """Export user data for GDPR compliance"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="ExportUserDataView GET")
     def get(self, request):
         user = request.user
         
@@ -720,6 +749,7 @@ class DeleteAccountView(APIView):
     """Delete user account with confirmation"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="DeleteAccountView POST")
     def post(self, request):
         password = request.data.get('password')
         confirmation_phrase = request.data.get('confirmation_phrase')
@@ -774,6 +804,7 @@ class UserMutualFriendsView(APIView):
     """Get mutual friends with another user"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserMutualFriendsView GET")
     def get(self, request, user_id):
         try:
             other_user = User.objects.get(id=user_id)
@@ -818,6 +849,7 @@ class UserOnlineStatusView(APIView):
     """Get online status of users"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserOnlineStatusView GET")
     def get(self, request):
         user_ids = request.GET.getlist('user_ids')
         
@@ -859,6 +891,7 @@ class UserAchievementsView(APIView):
     """User achievements view"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserAchievementsView GET")
     def get(self, request):
         """Return user achievements"""
         user = request.user
@@ -915,6 +948,7 @@ class UserStatsView(APIView):
     """Detailed user statistics"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserStatsView GET")
     def get(self, request):
         """Return detailed user statistics"""
         user = request.user
@@ -977,6 +1011,7 @@ class UserSessionsView(APIView):
     """User session management"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserSessionsView GET")
     def get(self, request):
         """List active sessions for user"""
         # For now, return mock data. This would integrate with actual session management
@@ -1002,6 +1037,7 @@ class RevokeSessionView(APIView):
     """Revoke a specific session"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="RevokeSessionView DELETE")
     def delete(self, request, session_id):
         """Revoke specific session"""
         # TODO: Implement actual session revocation
@@ -1015,6 +1051,7 @@ class RevokeAllSessionsView(APIView):
     """Revoke all sessions except current"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="RevokeAllSessionsView POST")
     def post(self, request):
         """Revoke all other sessions"""
         # TODO: Implement actual session revocation
@@ -1028,6 +1065,7 @@ class Enable2FAView(APIView):
     """Enable Two-Factor Authentication"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="Enable2FAView POST")
     def post(self, request):
         """Enable 2FA for user"""
         token = request.data.get('token')
@@ -1051,6 +1089,7 @@ class Disable2FAView(APIView):
     """Disable Two-Factor Authentication"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="Disable2FAView POST")
     def post(self, request):
         """Disable 2FA for user"""
         token = request.data.get('token')
@@ -1081,6 +1120,7 @@ class Setup2FAView(APIView):
     """Setup Two-Factor Authentication"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="Setup2FAView POST")
     def post(self, request):
         """Generate 2FA setup data"""
         import secrets
@@ -1127,6 +1167,7 @@ class OnboardingView(APIView):
     """Complete user onboarding"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="OnboardingView POST")
     def post(self, request):
         """Complete user onboarding process"""
         user = request.user
@@ -1151,6 +1192,7 @@ class UpdatePasswordView(APIView):
     """Update user password"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UpdatePasswordView POST")
     def post(self, request):
         """Update user password"""
         current_password = request.data.get('current_password')
@@ -1199,6 +1241,7 @@ class UserInventoryView(APIView):
     """User inventory from store"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserInventoryView GET")
     def get(self, request):
         """Get user's inventory"""
         try:
@@ -1239,6 +1282,7 @@ class FriendSuggestionsView(APIView):
     """Friend suggestions for user"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="FriendSuggestionsView GET")
     def get(self, request):
         """Get friend suggestions"""
         user = request.user

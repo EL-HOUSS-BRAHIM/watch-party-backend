@@ -3,6 +3,8 @@ Video serializers for Watch Party Backend
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
 from .models import Video, VideoLike, VideoComment, VideoUpload
 
@@ -28,6 +30,9 @@ class VideoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'uploader', 'created_at', 'updated_at', 'view_count', 'like_count']
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_uploader(self, obj):
         return {
             'id': str(obj.uploader.id),
@@ -35,6 +40,9 @@ class VideoSerializer(serializers.ModelSerializer):
             'avatar': obj.uploader.avatar.url if obj.uploader.avatar else None,
             'is_premium': obj.uploader.is_premium
         }
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_duration_formatted(self, obj):
         if obj.duration:
@@ -48,6 +56,9 @@ class VideoSerializer(serializers.ModelSerializer):
             return f"{minutes:02d}:{seconds:02d}"
         return None
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_file_size_formatted(self, obj):
         if obj.file_size:
             for unit in ['B', 'KB', 'MB', 'GB']:
@@ -57,11 +68,17 @@ class VideoSerializer(serializers.ModelSerializer):
             return f"{obj.file_size:.1f} TB"
         return None
     
+    @extend_schema_field(OpenApiTypes.BOOL)
+
+    
     def get_is_liked(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return VideoLike.objects.filter(user=request.user, video=obj, is_like=True).exists()
         return False
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_can_edit(self, obj):
         request = self.context.get('request')
@@ -82,8 +99,14 @@ class VideoDetailSerializer(VideoSerializer):
             'require_premium', 'comments_count', 'can_download'
         ]
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_comments_count(self, obj):
         return obj.comments.count()
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_can_download(self, obj):
         if not obj.allow_download:
@@ -147,6 +170,9 @@ class VideoCommentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'is_edited', 'created_at', 'updated_at', 'parent']
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_user(self, obj):
         return {
             'id': str(obj.user.id),
@@ -155,10 +181,16 @@ class VideoCommentSerializer(serializers.ModelSerializer):
             'is_premium': obj.user.is_premium
         }
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_replies(self, obj):
         if obj.replies.exists():
             return VideoCommentSerializer(obj.replies.all(), many=True, context=self.context).data
         return []
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_can_edit(self, obj):
         request = self.context.get('request')

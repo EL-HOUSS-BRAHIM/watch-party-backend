@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Q
 from django.db import transaction
+from drf_spectacular.utils import extend_schema
 from datetime import timedelta, datetime
 
 from core.responses import StandardResponse
@@ -25,6 +26,7 @@ class NotificationListView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="NotificationListView GET")
     def get(self, request):
         """Get notifications for authenticated user"""
         user = request.user
@@ -139,6 +141,7 @@ class NotificationDetailView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="NotificationDetailView GET")
     def get(self, request, notification_id):
         """Get notification details"""
         try:
@@ -176,6 +179,7 @@ class NotificationDetailView(APIView):
             message="Notification retrieved successfully"
         )
     
+    @extend_schema(summary="NotificationDetailView PATCH")
     def patch(self, request, notification_id):
         """Update notification (mark as read/dismissed)"""
         try:
@@ -204,6 +208,7 @@ class NotificationDetailView(APIView):
         
         return StandardResponse.success(message="Notification updated successfully")
     
+    @extend_schema(summary="NotificationDetailView DELETE")
     def delete(self, request, notification_id):
         """Delete notification"""
         try:
@@ -219,6 +224,7 @@ class NotificationBulkActionsView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="NotificationBulkActionsView POST")
     def post(self, request):
         """Perform bulk actions on notifications"""
         action = request.data.get('action')
@@ -278,6 +284,7 @@ class NotificationPreferencesView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="NotificationPreferencesView GET")
     def get(self, request):
         """Get user's notification preferences"""
         user = request.user
@@ -315,6 +322,7 @@ class NotificationPreferencesView(APIView):
             message="Notification preferences retrieved successfully"
         )
     
+    @extend_schema(summary="NotificationPreferencesView PUT")
     def put(self, request):
         """Update notification preferences"""
         user = request.user
@@ -351,6 +359,7 @@ class NotificationBatchView(APIView):
     
     permission_classes = [IsAdminUser]
     
+    @extend_schema(summary="NotificationBatchView GET")
     def get(self, request):
         """Get notification batches"""
         batches = NotificationBatch.objects.all().order_by('-created_at')
@@ -381,6 +390,7 @@ class NotificationBatchView(APIView):
             message=f"Retrieved {len(batches_data)} notification batches"
         )
     
+    @extend_schema(summary="NotificationBatchView POST")
     def post(self, request):
         """Create a new notification batch"""
         name = request.data.get('name', '').strip()
@@ -425,6 +435,7 @@ class NotificationAnalyticsView(APIView):
     
     permission_classes = [IsAdminUser]
     
+    @extend_schema(summary="NotificationAnalyticsView GET")
     def get(self, request):
         """Get notification analytics"""
         date_from = request.GET.get('date_from')
@@ -507,6 +518,7 @@ class PushSubscriptionView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="PushSubscriptionView POST")
     def post(self, request):
         """Register push notification subscription"""
         endpoint = request.data.get('endpoint')
@@ -534,6 +546,7 @@ class PushSubscriptionView(APIView):
             message="Push subscription registered successfully"
         )
     
+    @extend_schema(summary="PushSubscriptionView DELETE")
     def delete(self, request):
         """Remove push notification subscription"""
         endpoint = request.data.get('endpoint')

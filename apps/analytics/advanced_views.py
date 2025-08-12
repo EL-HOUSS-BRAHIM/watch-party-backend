@@ -4,11 +4,13 @@ Phase 2 implementation with real-time dashboards and advanced metrics
 """
 
 from rest_framework import generics, permissions, status
+from drf_spectacular.openapi import OpenApiResponse, OpenApiExample
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Sum, Avg, Count
 from django.db import models
+from drf_spectacular.utils import extend_schema
 from datetime import timedelta, datetime
 from typing import Dict, Any, List
 
@@ -25,6 +27,7 @@ class RealTimeDashboardView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="RealTimeDashboardView GET")
     def get(self, request, *args, **kwargs):
         """Get real-time dashboard data"""
         time_range = request.GET.get('range', '24h')  # 1h, 24h, 7d, 30d
@@ -282,6 +285,7 @@ class AdvancedAnalyticsView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="AdvancedAnalyticsView POST")
     def post(self, request, *args, **kwargs):
         """Execute custom analytics query"""
         query_config = request.data
@@ -411,6 +415,7 @@ class A_BTestingView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAdminUser]
     
+    @extend_schema(summary="A_BTestingView GET")
     def get(self, request, *args, **kwargs):
         """Get A/B test results"""
         test_id = request.GET.get('test_id')
@@ -420,6 +425,7 @@ class A_BTestingView(generics.GenericAPIView):
         else:
             return self._get_all_active_tests()
     
+    @extend_schema(summary="A_BTestingView POST")
     def post(self, request, *args, **kwargs):
         """Create new A/B test"""
         test_config = request.data
@@ -500,6 +506,7 @@ class PredictiveAnalyticsView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="PredictiveAnalyticsView GET")
     def get(self, request, *args, **kwargs):
         """Get predictive analytics insights"""
         prediction_type = request.GET.get('type', 'user_churn')

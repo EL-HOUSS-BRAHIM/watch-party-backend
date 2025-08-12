@@ -8,6 +8,9 @@ from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
 from datetime import timedelta
 import secrets
+from typing import Optional, Dict, Any
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 
 from .models import User, UserProfile, EmailVerification, PasswordReset, SocialAccount
 
@@ -170,7 +173,9 @@ class UserProfileDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'email', 'date_joined']
     
-    def get_profile(self, obj):
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_profile(self, obj) -> Optional[Dict[str, Any]]:
+        """Get user profile data"""
         try:
             profile = obj.profile
             return {

@@ -15,6 +15,9 @@ from django.utils import timezone
 from django.db.models import Q, Count
 from django.http import JsonResponse
 
+# Import enhanced health views
+from core.health_views import HealthCheckView, ReadinessCheckView, LivenessCheckView
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -161,6 +164,11 @@ def redirect_to_api(request, endpoint_name, correct_path):
 urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
+    
+    # Health checks (no authentication required)
+    path('health/', HealthCheckView.as_view(), name='health_check'),
+    path('healthz/', LivenessCheckView.as_view(), name='liveness_check'),
+    path('readiness/', ReadinessCheckView.as_view(), name='readiness_check'),
     
     # API Root
     path('api/', api_root, name='api_root'),

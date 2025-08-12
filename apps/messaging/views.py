@@ -4,8 +4,10 @@ Views for Messaging functionality
 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework import serializers
 from django.db import models
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 
 from core.responses import StandardResponse
 from .models import Conversation, Message, MessageReaction
@@ -15,8 +17,10 @@ from apps.authentication.models import User
 class ConversationsView(APIView):
     """List user's conversations"""
     
+    serializer_class = serializers.Serializer
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="ConversationsView GET")
     def get(self, request):
         """Get user's conversations"""
         user = request.user
@@ -81,6 +85,7 @@ class ConversationsView(APIView):
             message="Conversations retrieved successfully"
         )
     
+    @extend_schema(summary="ConversationsView POST")
     def post(self, request):
         """Create a new conversation"""
         user = request.user
@@ -137,8 +142,10 @@ class ConversationsView(APIView):
 class MessagesView(APIView):
     """Get and send messages in a conversation"""
     
+    serializer_class = serializers.Serializer
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="MessagesView GET")
     def get(self, request, conversation_id):
         """Get messages from a conversation"""
         user = request.user
@@ -222,6 +229,7 @@ class MessagesView(APIView):
             message="Messages retrieved successfully"
         )
     
+    @extend_schema(summary="MessagesView POST")
     def post(self, request, conversation_id):
         """Send a message to a conversation"""
         user = request.user

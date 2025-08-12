@@ -63,7 +63,7 @@ class OptimizedUserSerializer(OptimizedModelSerializer):
     class Meta:
         model = apps.get_model('authentication', 'User')
         fields = [
-            'id', 'username', 'first_name', 'last_name', 'email',
+            'id', 'email', 'first_name', 'last_name',
             'profile_picture', 'is_online', 'date_joined',
             'followers_count', 'following_count', 'videos_count'
         ]
@@ -131,7 +131,7 @@ class OptimizedVideoSerializer(OptimizedModelSerializer):
         uploader = obj.uploaded_by
         return {
             'id': uploader.id,
-            'username': uploader.username,
+            'email': uploader.email,
             'name': uploader.get_full_name(),
             'profile_picture': uploader.profile_picture.url if uploader.profile_picture else None,
         }
@@ -179,7 +179,7 @@ class OptimizedWatchPartySerializer(OptimizedModelSerializer):
         host = obj.host
         return {
             'id': host.id,
-            'username': host.username,
+            'email': host.email,
             'name': host.get_full_name(),
             'profile_picture': host.profile_picture.url if host.profile_picture else None,
         }
@@ -256,7 +256,7 @@ class OptimizedNotificationSerializer(OptimizedModelSerializer):
         user = obj.related_user
         return {
             'id': user.id,
-            'username': user.username,
+            'email': user.email,
             'name': user.get_full_name(),
             'profile_picture': user.profile_picture.url if user.profile_picture else None,
         }

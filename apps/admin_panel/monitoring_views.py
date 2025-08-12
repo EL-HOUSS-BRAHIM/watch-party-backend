@@ -3,10 +3,12 @@ Monitoring views for admin panel
 """
 
 from rest_framework.views import APIView
+from drf_spectacular.openapi import OpenApiResponse, OpenApiExample
 from rest_framework.permissions import IsAdminUser
 from rest_framework.decorators import api_view, permission_classes
 from django.utils import timezone
 from django.core.cache import cache
+from drf_spectacular.utils import extend_schema
 import asyncio
 
 from core.responses import StandardResponse
@@ -25,6 +27,7 @@ class MonitoringDashboardView(APIView):
         description="Retrieve comprehensive monitoring dashboard with system metrics and alerts",
         tags=['Admin', 'Monitoring']
     )
+    @extend_schema(summary="MonitoringDashboardView GET")
     def get(self, request):
         """Get monitoring dashboard data"""
         
@@ -139,6 +142,7 @@ class AlertManagementView(APIView):
         description="Retrieve all active and recent alerts",
         tags=['Admin', 'Monitoring', 'Alerts']
     )
+    @extend_schema(summary="AlertManagementView GET")
     def get(self, request):
         """Get all alerts"""
         try:
@@ -197,6 +201,7 @@ class AlertManagementView(APIView):
         description="Mark an alert as resolved",
         tags=['Admin', 'Monitoring', 'Alerts']
     )
+    @extend_schema(summary="AlertManagementView POST")
     def post(self, request):
         """Resolve an alert"""
         alert_id = request.data.get('alert_id')

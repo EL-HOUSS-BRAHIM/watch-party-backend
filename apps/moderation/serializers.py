@@ -3,6 +3,8 @@ Content reporting serializers for Watch Party Backend
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
 from .models import ContentReport, ReportAction
 
@@ -140,8 +142,8 @@ class ContentReportStatsSerializer(serializers.Serializer):
 class ModerationQueueSerializer(serializers.ModelSerializer):
     """Serializer for moderation queue display"""
     
-    reported_by_username = serializers.CharField(source='reported_by.username', read_only=True)
-    assigned_to_username = serializers.CharField(source='assigned_to.username', read_only=True)
+    reported_by_email = serializers.CharField(source='reported_by.email', read_only=True)
+    assigned_to_email = serializers.CharField(source='assigned_to.email', read_only=True)
     content_title = serializers.SerializerMethodField()
     content_url = serializers.SerializerMethodField()
     age_hours = serializers.SerializerMethodField()
@@ -150,10 +152,13 @@ class ModerationQueueSerializer(serializers.ModelSerializer):
         model = ContentReport
         fields = [
             'id', 'report_type', 'content_type', 'status', 'priority',
-            'description', 'reported_by_username', 'assigned_to_username',
+            'description', 'reported_by_email', 'assigned_to_email',
             'content_title', 'content_url', 'age_hours', 'created_at'
         ]
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    @extend_schema_field(OpenApiTypes.STR)
     def get_content_title(self, obj):
         """Get title/name of the reported content"""
         if obj.reported_video:
@@ -161,9 +166,10 @@ class ModerationQueueSerializer(serializers.ModelSerializer):
         elif obj.reported_party:
             return obj.reported_party.title
         elif obj.reported_user:
-            return f"User: {obj.reported_user.username}"
+            return f"User: {obj.reported_user.get_full_name() or obj.reported_user.email}"
         return "Unknown Content"
     
+    @extend_schema_field(OpenApiTypes.STR)
     def get_content_url(self, obj):
         """Get URL of the reported content"""
         if obj.reported_video:
@@ -174,6 +180,7 @@ class ModerationQueueSerializer(serializers.ModelSerializer):
             return f"/users/{obj.reported_user.id}"
         return None
     
+    @extend_schema_field(OpenApiTypes.FLOAT)
     def get_age_hours(self, obj):
         """Get age of report in hours"""
         from django.utils import timezone

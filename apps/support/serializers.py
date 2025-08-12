@@ -3,6 +3,8 @@ Support System Serializers for Watch Party Backend
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from .models import (
     FAQCategory, FAQ, SupportTicket, SupportTicketMessage, 
     UserFeedback, FeedbackVote
@@ -36,6 +38,9 @@ class FAQCategorySerializer(serializers.ModelSerializer):
             'name', 'slug', 'description', 'icon', 'order',
             'faq_count', 'faqs'
         ]
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_faq_count(self, obj):
         return obj.faqs.filter(is_active=True).count()
@@ -87,6 +92,9 @@ class UserFeedbackSerializer(serializers.ModelSerializer):
             'admin_response', 'user_name', 'created_at', 'updated_at'
         ]
         read_only_fields = ['upvotes', 'downvotes', 'user_name']
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_user_vote(self, obj):
         """Get current user's vote on this feedback"""

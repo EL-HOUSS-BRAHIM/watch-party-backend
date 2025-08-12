@@ -1,4 +1,4 @@
-from rest_framework import generics, status, permissions
+from rest_framework import generics, status, permissions, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
 from django.db import transaction
+from drf_spectacular.utils import extend_schema
 
 from .models import Event, EventAttendee, EventInvitation
 from .serializers import (
@@ -28,6 +29,7 @@ class EventListCreateView(generics.ListCreateAPIView):
     """
     List all events or create a new event
     """
+    serializer_class = serializers.Serializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = EventPagination
     

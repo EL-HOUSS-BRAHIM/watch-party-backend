@@ -5,6 +5,7 @@ Views for Social Groups functionality
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 
 from core.responses import StandardResponse
 from .models import SocialGroup, GroupMembership
@@ -15,6 +16,7 @@ class SocialGroupsView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="SocialGroupsView GET")
     def get(self, request):
         """Get social groups"""
         user = request.user
@@ -75,6 +77,7 @@ class SocialGroupsView(APIView):
             message="Social groups retrieved successfully"
         )
     
+    @extend_schema(summary="SocialGroupsView POST")
     def post(self, request):
         """Create a new social group"""
         user = request.user
@@ -130,6 +133,7 @@ class JoinGroupView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="JoinGroupView POST")
     def post(self, request, group_id):
         """Join a group"""
         user = request.user
@@ -181,6 +185,7 @@ class LeaveGroupView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="LeaveGroupView POST")
     def post(self, request, group_id):
         """Leave a group"""
         user = request.user
@@ -226,6 +231,7 @@ class GroupDetailView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="GroupDetailView GET")
     def get(self, request, group_id):
         """Get group details"""
         user = request.user

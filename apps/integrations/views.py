@@ -5,7 +5,9 @@ Integration management views for admin panel
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework import serializers
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 import asyncio
 
 from core.responses import StandardResponse
@@ -28,6 +30,7 @@ class IntegrationStatusView(APIView):
     """
     View to check status of all integrations
     """
+    serializer_class = serializers.Serializer
     permission_classes = [IsAdminUser]
     
     @api_response_documentation(
@@ -35,6 +38,7 @@ class IntegrationStatusView(APIView):
         description="Check the status and health of all registered integrations",
         tags=['Admin', 'Integrations']
     )
+    @extend_schema(summary="IntegrationStatusView GET")
     def get(self, request):
         """Get status of all integrations"""
         
@@ -99,6 +103,7 @@ class IntegrationManagementView(APIView):
     """
     View to manage integrations (enable/disable, configure)
     """
+    serializer_class = serializers.Serializer
     permission_classes = [IsAdminUser]
     
     @api_response_documentation(
@@ -106,6 +111,7 @@ class IntegrationManagementView(APIView):
         description="Enable/disable integrations or update their configuration",
         tags=['Admin', 'Integrations']
     )
+    @extend_schema(summary="IntegrationManagementView POST")
     def post(self, request):
         """Update integration configuration"""
         integration_name = request.data.get('integration_name')

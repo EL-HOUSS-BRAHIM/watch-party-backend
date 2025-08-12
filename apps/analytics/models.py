@@ -112,6 +112,32 @@ class PartyAnalytics(models.Model):
         
     def __str__(self):
         return f"Analytics for {self.party.title}"
+    
+    @property
+    def engagement_score(self) -> float:
+        """Calculate party engagement score"""
+        if self.total_participants == 0:
+            return 0.0
+        
+        # Calculate engagement based on messages and reactions per participant
+        message_score = (self.total_messages / self.total_participants) * 10
+        reaction_score = (self.total_reactions / self.total_participants) * 5
+        
+        return round(min(message_score + reaction_score, 100.0), 2)
+    
+    @property
+    def average_session_duration(self) -> str:
+        """Get average session duration as formatted string"""
+        if self.avg_session_duration == 0:
+            return "0:00"
+        
+        hours = int(self.avg_session_duration // 3600)
+        minutes = int((self.avg_session_duration % 3600) // 60)
+        
+        if hours > 0:
+            return f"{hours}:{minutes:02d}"
+        else:
+            return f"{minutes}:00"
 
 
 class AnalyticsEvent(models.Model):

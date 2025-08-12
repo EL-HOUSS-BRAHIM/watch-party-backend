@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .models import Event, EventAttendee, EventInvitation, EventReminder
@@ -10,7 +12,7 @@ class EventOrganizerSerializer(serializers.ModelSerializer):
     """Serializer for event organizer information"""
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'email']
+        fields = ['id', 'email', 'first_name', 'last_name']
 
 
 class EventAttendeeSerializer(serializers.ModelSerializer):
@@ -75,6 +77,9 @@ class EventListSerializer(serializers.ModelSerializer):
             'created_at'
         ]
     
+    @extend_schema_field(OpenApiTypes.BOOL)
+
+    
     def get_is_attending(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
@@ -109,6 +114,9 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'is_full', 'is_upcoming', 'is_ongoing', 'is_past', 'created_at', 'updated_at'
         ]
     
+    @extend_schema_field(OpenApiTypes.BOOL)
+
+    
     def get_is_attending(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
@@ -117,6 +125,9 @@ class EventDetailSerializer(serializers.ModelSerializer):
                 status='attending'
             ).exists()
         return False
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_user_attendance_status(self, obj):
         request = self.context.get('request')

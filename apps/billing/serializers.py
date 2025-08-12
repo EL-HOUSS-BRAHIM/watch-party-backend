@@ -4,6 +4,11 @@ Billing serializers for Watch Party Backend
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from .models import (
     SubscriptionPlan, Subscription, PaymentMethod, 
     Invoice, Payment, BillingAddress, PromotionalCode
@@ -28,7 +33,8 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'features', 'is_most_popular']
     
-    def get_features(self, obj):
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_features(self, obj) -> List[str]:
         """Get formatted list of plan features"""
         features = []
         
@@ -55,7 +61,8 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
         
         return features
     
-    def get_is_most_popular(self, obj):
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_most_popular(self, obj) -> bool:
         """Check if this is the most popular plan"""
         return obj.is_featured
 
@@ -78,15 +85,16 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
-    def get_days_until_renewal(self, obj):
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_days_until_renewal(self, obj) -> int:
         """Get days until next renewal"""
         if obj.current_period_end:
-            from django.utils import timezone
             delta = obj.current_period_end - timezone.now()
             return max(0, delta.days)
         return 0
     
-    def get_is_expiring_soon(self, obj):
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_expiring_soon(self, obj) -> bool:
         """Check if subscription is expiring soon (within 7 days)"""
         return self.get_days_until_renewal(obj) <= 7
 
@@ -106,14 +114,17 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'display_name', 'is_expired', 'created_at']
     
-    def get_display_name(self, obj):
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_display_name(self, obj) -> str:
         """Get human-readable payment method name"""
         if obj.card_brand and obj.card_last4:
             brand = obj.card_brand.title()
             return f"{brand} ending in {obj.card_last4}"
         return obj.payment_method_type.title()
     
-    def get_is_expired(self, obj):
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_expired(self, obj) -> bool:
+        """Check if card has expired"""
         """Check if card has expired"""
         if obj.card_exp_month and obj.card_exp_year:
             from django.utils import timezone
@@ -138,7 +149,8 @@ class InvoiceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'plan_name', 'payment_status_display', 'created_at']
     
-    def get_payment_status_display(self, obj):
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_payment_status_display(self, obj) -> str:
         """Get human-readable payment status"""
         status_map = {
             'draft': 'Draft',
@@ -163,6 +175,9 @@ class PaymentSerializer(serializers.ModelSerializer):
             'created_at', 'paid_at'
         ]
         read_only_fields = ['id', 'plan_name', 'status_display', 'created_at']
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_status_display(self, obj):
         """Get human-readable payment status"""
@@ -211,6 +226,9 @@ class PromotionalCodeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'current_uses', 'is_valid', 'discount_description']
     
+    @extend_schema_field(OpenApiTypes.BOOL)
+
+    
     def get_is_valid(self, obj):
         """Check if promotional code is currently valid"""
         from django.utils import timezone
@@ -218,6 +236,9 @@ class PromotionalCodeSerializer(serializers.ModelSerializer):
         return (obj.is_active and 
                 obj.valid_from <= now <= obj.valid_until and
                 (not obj.max_uses or obj.current_uses < obj.max_uses))
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_discount_description(self, obj):
         """Get human-readable discount description"""

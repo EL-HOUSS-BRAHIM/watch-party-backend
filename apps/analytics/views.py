@@ -3,12 +3,14 @@ Analytics views for Watch Party Backend
 """
 
 from rest_framework import generics, permissions, status
+from drf_spectacular.openapi import OpenApiResponse, OpenApiExample
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Sum, Avg, Count, Q
+from drf_spectacular.utils import extend_schema
 from datetime import timedelta, date
 from .models import UserAnalytics, PartyAnalytics, VideoAnalytics, AnalyticsEvent, SystemAnalytics
 from .serializers import (
@@ -25,6 +27,7 @@ class DashboardView(generics.GenericAPIView):
     """Main analytics dashboard view"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="DashboardView GET")
     def get(self, request):
         if request.user.is_staff:
             return AdminAnalyticsView().get(request)
@@ -49,6 +52,7 @@ class UserDetailedStatsView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="UserDetailedStatsView GET")
     def get(self, request, *args, **kwargs):
         user = request.user
         analytics, created = UserAnalytics.objects.get_or_create(user=user)
@@ -188,6 +192,7 @@ class PartyDetailedStatsView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="PartyDetailedStatsView GET")
     def get(self, request, party_id):
         party = get_object_or_404(WatchParty, id=party_id)
         user = request.user
@@ -290,6 +295,7 @@ class AdminAnalyticsView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     
+    @extend_schema(summary="AdminAnalyticsView GET")
     def get(self, request):
         # Get or create today's system analytics
         today = date.today()
@@ -397,6 +403,7 @@ class ExportAnalyticsView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="ExportAnalyticsView POST")
     def post(self, request):
         export_type = request.data.get('type')  # 'user', 'party', 'video'
         entity_id = request.data.get('entity_id')

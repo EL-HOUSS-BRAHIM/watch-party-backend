@@ -10,6 +10,7 @@ from django.apps import apps
 from django.utils import timezone
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from django.core.cache import cache
+from drf_spectacular.utils import extend_schema
 from datetime import timedelta
 import time
 
@@ -23,6 +24,7 @@ class GlobalSearchView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="GlobalSearchView GET")
     def get(self, request):
         """Search across multiple models with filters and sorting"""
         start_time = time.time()
@@ -315,6 +317,7 @@ class SearchSuggestionsView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="SearchSuggestionsView GET")
     def get(self, request):
         """Get search suggestions"""
         query = request.GET.get('q', '').strip()
@@ -368,6 +371,7 @@ class SearchSuggestionsView(APIView):
             message=f"Found {len(suggestions_data)} suggestions"
         )
     
+    @extend_schema(summary="SearchSuggestionsView POST")
     def post(self, request):
         """Track suggestion click"""
         suggestion_id = request.data.get('suggestion_id')
@@ -390,6 +394,7 @@ class SavedSearchView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="SavedSearchView GET")
     def get(self, request):
         """Get user's saved searches"""
         saved_searches = SavedSearch.objects.filter(
@@ -415,6 +420,7 @@ class SavedSearchView(APIView):
             message=f"Retrieved {len(searches_data)} saved searches"
         )
     
+    @extend_schema(summary="SavedSearchView POST")
     def post(self, request):
         """Save a new search"""
         name = request.data.get('name', '').strip()
@@ -452,6 +458,7 @@ class SavedSearchView(APIView):
             message="Search saved successfully"
         )
     
+    @extend_schema(summary="SavedSearchView PUT")
     def put(self, request, search_id):
         """Update a saved search"""
         try:
@@ -474,6 +481,7 @@ class SavedSearchView(APIView):
         
         return StandardResponse.success(message="Saved search updated successfully")
     
+    @extend_schema(summary="SavedSearchView DELETE")
     def delete(self, request, search_id):
         """Delete a saved search"""
         try:
@@ -490,6 +498,7 @@ class TrendingSearchView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="TrendingSearchView GET")
     def get(self, request):
         """Get trending searches"""
         period = request.GET.get('period', 'daily')  # daily, weekly, monthly
@@ -530,6 +539,7 @@ class SearchAnalyticsView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="SearchAnalyticsView GET")
     def get(self, request):
         """Get search analytics data"""
         if not request.user.is_staff:
@@ -686,6 +696,7 @@ class DiscoverContentView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="DiscoverContentView GET")
     def get(self, request):
         """Get personalized content recommendations"""
         user = request.user

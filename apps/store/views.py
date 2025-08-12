@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 from django.db import models
+from drf_spectacular.utils import extend_schema
 
 from core.responses import StandardResponse
 from .models import (
@@ -26,6 +27,7 @@ class StoreItemsView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="StoreItemsView GET")
     def get(self, request):
         """Get available store items"""
         category = request.GET.get('category')
@@ -67,6 +69,7 @@ class PurchaseItemView(APIView):
     permission_classes = [IsAuthenticated]
     
     @transaction.atomic
+    @extend_schema(summary="PurchaseItemView POST")
     def post(self, request):
         """Purchase an item"""
         serializer = PurchaseItemSerializer(data=request.data)
@@ -148,6 +151,7 @@ class UserInventoryView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="UserInventoryView GET")
     def get(self, request):
         """Get user's inventory"""
         user = request.user
@@ -184,6 +188,7 @@ class UserInventoryView(APIView):
             message="Inventory retrieved successfully"
         )
     
+    @extend_schema(summary="UserInventoryView PATCH")
     def patch(self, request):
         """Update inventory item (equip/unequip)"""
         item_id = request.data.get('item_id')
@@ -231,6 +236,7 @@ class AchievementsView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="AchievementsView GET")
     def get(self, request):
         """Get user's achievements and available achievements"""
         user = request.user
@@ -292,6 +298,7 @@ class RewardsView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="RewardsView GET")
     def get(self, request):
         """Get available rewards"""
         user = request.user
@@ -327,6 +334,7 @@ class ClaimRewardView(APIView):
     permission_classes = [IsAuthenticated]
     
     @transaction.atomic
+    @extend_schema(summary="ClaimRewardView POST")
     def post(self, request, reward_id):
         """Claim a specific reward"""
         user = request.user
@@ -411,6 +419,7 @@ class UserStatsView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="UserStatsView GET")
     def get(self, request):
         """Get detailed user statistics"""
         user = request.user

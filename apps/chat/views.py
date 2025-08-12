@@ -25,6 +25,10 @@ class ChatHistoryView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        # Handle schema generation when there's no user
+        if getattr(self, 'swagger_fake_view', False):
+            return ChatMessage.objects.none()
+        
         room_id = self.kwargs.get('room_id')
         room = get_object_or_404(ChatRoom, id=room_id)
         
@@ -386,6 +390,10 @@ class ChatModerationLogView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        # Handle schema generation when there's no user
+        if getattr(self, 'swagger_fake_view', False):
+            return ChatModerationLog.objects.none()
+        
         room_id = self.kwargs.get('room_id')
         room = get_object_or_404(ChatRoom, id=room_id)
         

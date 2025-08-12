@@ -3,16 +3,19 @@ System health and status endpoints
 """
 
 from rest_framework.views import APIView
+from drf_spectacular.openapi import OpenApiResponse, OpenApiExample
 from rest_framework.permissions import AllowAny, IsAdminUser
 from django.utils import timezone
 from django.db import connection
 from django.core.cache import cache
+from drf_spectacular.utils import extend_schema
 from datetime import datetime, timedelta
 import psutil
 import sys
 
 from core.responses import StandardResponse
 from core.error_handling import APIHealthMonitor
+from core.base_serializers import HealthCheckResponseSerializer, StandardAPIResponseSerializer
 
 
 class HealthCheckView(APIView):
@@ -20,7 +23,9 @@ class HealthCheckView(APIView):
     Public health check endpoint for load balancers and monitoring
     """
     permission_classes = [AllowAny]
+    serializer_class = HealthCheckResponseSerializer
     
+    @extend_schema(summary="HealthCheckView GET")
     def get(self, request):
         """Basic health check"""
         try:
@@ -42,7 +47,9 @@ class DetailedStatusView(APIView):
     Detailed system status for administrators
     """
     permission_classes = [IsAdminUser]
+    serializer_class = StandardAPIResponseSerializer
     
+    @extend_schema(summary="DetailedStatusView GET")
     def get(self, request):
         """Get detailed system status"""
         try:
@@ -152,7 +159,9 @@ class MetricsView(APIView):
     System metrics endpoint for monitoring tools
     """
     permission_classes = [IsAdminUser]
+    serializer_class = StandardAPIResponseSerializer
     
+    @extend_schema(summary="MetricsView GET")
     def get(self, request):
         """Get system metrics in Prometheus format"""
         try:

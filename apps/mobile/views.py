@@ -5,8 +5,10 @@ Mobile app specific API endpoints and optimizations
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework import serializers
 from django.utils import timezone
 from django.db.models import Q, Count, Prefetch
+from drf_spectacular.utils import extend_schema
 from datetime import timedelta
 
 from core.responses import StandardResponse
@@ -17,6 +19,7 @@ class MobileAppConfigView(APIView):
     """
     Mobile app configuration endpoint
     """
+    serializer_class = serializers.Serializer
     permission_classes = [IsAuthenticated]
     
     @api_response_documentation(
@@ -24,6 +27,7 @@ class MobileAppConfigView(APIView):
         description="Retrieve configuration settings optimized for mobile app",
         tags=['Mobile']
     )
+    @extend_schema(summary="MobileAppConfigView GET")
     def get(self, request):
         """Get mobile app configuration"""
         request.headers.get('X-App-Version', '1.0.0')
@@ -92,6 +96,7 @@ class MobileHomeView(APIView):
     """
     Mobile optimized home screen data
     """
+    serializer_class = serializers.Serializer
     permission_classes = [IsAuthenticated]
     
     @api_response_documentation(
@@ -99,6 +104,7 @@ class MobileHomeView(APIView):
         description="Retrieve optimized home screen data for mobile app including parties, videos, and activities",
         tags=['Mobile']
     )
+    @extend_schema(summary="MobileHomeView GET")
     def get(self, request):
         """Get mobile home screen data"""
         user = request.user
@@ -341,6 +347,7 @@ class MobileOfflineSyncView(APIView):
     """
     Offline sync support for mobile app
     """
+    serializer_class = serializers.Serializer
     permission_classes = [IsAuthenticated]
     
     @api_response_documentation(
@@ -348,6 +355,7 @@ class MobileOfflineSyncView(APIView):
         description="Sync data for offline usage on mobile devices",
         tags=['Mobile', 'Sync']
     )
+    @extend_schema(summary="MobileOfflineSyncView POST")
     def post(self, request):
         """Sync offline data"""
         user = request.user
@@ -665,6 +673,7 @@ def report_crash(request):
 
 class MobileSyncView(APIView):
     """Data synchronization for mobile devices"""
+    serializer_class = serializers.Serializer
     permission_classes = [IsAuthenticated]
     
     @api_response_documentation(
@@ -672,6 +681,7 @@ class MobileSyncView(APIView):
         description="Full synchronization endpoint for mobile app data",
         tags=['Mobile', 'Sync']
     )
+    @extend_schema(summary="MobileSyncView POST")
     def post(self, request):
         """Perform data synchronization"""
         from .models import MobileDevice, MobileSyncData

@@ -4,6 +4,8 @@ Handles serialization of interactive features data.
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
@@ -15,13 +17,13 @@ from .models import (
 User = get_user_model()
 
 
-class UserBasicSerializer(serializers.ModelSerializer):
+class InteractiveUserBasicSerializer(serializers.ModelSerializer):
     """Basic user serializer for interactive features"""
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'avatar']
-        read_only_fields = ['id', 'username', 'first_name', 'last_name', 'avatar']
+        fields = ['id', 'email', 'first_name', 'last_name', 'avatar']
+        read_only_fields = ['id', 'email', 'first_name', 'last_name', 'avatar']
 
 
 # ============================================================================
@@ -31,7 +33,7 @@ class UserBasicSerializer(serializers.ModelSerializer):
 class LiveReactionSerializer(serializers.ModelSerializer):
     """Serializer for live reactions"""
     
-    user = UserBasicSerializer(read_only=True)
+    user = InteractiveUserBasicSerializer(read_only=True)
     
     class Meta:
         model = LiveReaction
@@ -94,7 +96,7 @@ class VoiceChatRoomSerializer(serializers.ModelSerializer):
 class VoiceChatParticipantSerializer(serializers.ModelSerializer):
     """Serializer for voice chat participants"""
     
-    user = UserBasicSerializer(read_only=True)
+    user = InteractiveUserBasicSerializer(read_only=True)
     session_duration = serializers.SerializerMethodField()
     
     class Meta:
@@ -104,6 +106,9 @@ class VoiceChatParticipantSerializer(serializers.ModelSerializer):
             'joined_at', 'left_at', 'session_duration'
         ]
         read_only_fields = ['id', 'user', 'room', 'joined_at', 'left_at', 'session_duration']
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_session_duration(self, obj):
         """Calculate session duration"""
@@ -121,7 +126,7 @@ class VoiceChatParticipantSerializer(serializers.ModelSerializer):
 class ScreenShareSerializer(serializers.ModelSerializer):
     """Serializer for screen sharing sessions"""
     
-    user = UserBasicSerializer(read_only=True)
+    user = InteractiveUserBasicSerializer(read_only=True)
     share_duration = serializers.SerializerMethodField()
     
     class Meta:
@@ -133,6 +138,9 @@ class ScreenShareSerializer(serializers.ModelSerializer):
             'ended_at', 'share_duration', 'ice_servers'
         ]
         read_only_fields = ['share_id', 'user', 'party', 'viewer_count', 'started_at', 'ended_at', 'share_duration']
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_share_duration(self, obj):
         """Calculate share duration"""
@@ -168,7 +176,7 @@ class ScreenShareSerializer(serializers.ModelSerializer):
 class InteractivePollSerializer(serializers.ModelSerializer):
     """Serializer for interactive polls"""
     
-    creator = UserBasicSerializer(read_only=True)
+    creator = InteractiveUserBasicSerializer(read_only=True)
     is_expired = serializers.SerializerMethodField()
     time_remaining = serializers.SerializerMethodField()
     
@@ -182,9 +190,15 @@ class InteractivePollSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['poll_id', 'creator', 'party', 'total_responses', 'created_at', 'is_expired', 'time_remaining']
     
+    @extend_schema_field(OpenApiTypes.BOOL)
+
+    
     def get_is_expired(self, obj):
         """Check if poll is expired"""
         return obj.is_expired()
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_time_remaining(self, obj):
         """Get time remaining in seconds"""
@@ -243,7 +257,7 @@ class InteractivePollSerializer(serializers.ModelSerializer):
 class PollResponseSerializer(serializers.ModelSerializer):
     """Serializer for poll responses"""
     
-    user = UserBasicSerializer(read_only=True)
+    user = InteractiveUserBasicSerializer(read_only=True)
     
     class Meta:
         model = PollResponse
@@ -293,7 +307,7 @@ class PollResponseSerializer(serializers.ModelSerializer):
 class InteractiveAnnotationSerializer(serializers.ModelSerializer):
     """Serializer for interactive annotations"""
     
-    user = UserBasicSerializer(read_only=True)
+    user = InteractiveUserBasicSerializer(read_only=True)
     
     class Meta:
         model = InteractiveAnnotation
@@ -337,7 +351,7 @@ class InteractiveAnnotationSerializer(serializers.ModelSerializer):
 class InteractiveSessionSerializer(serializers.ModelSerializer):
     """Serializer for interactive sessions"""
     
-    user = UserBasicSerializer(read_only=True)
+    user = InteractiveUserBasicSerializer(read_only=True)
     session_duration = serializers.SerializerMethodField()
     
     class Meta:
@@ -352,6 +366,9 @@ class InteractiveSessionSerializer(serializers.ModelSerializer):
             'voice_chat_duration', 'screen_shares_initiated', 'polls_participated',
             'annotations_created', 'started_at', 'ended_at', 'session_duration'
         ]
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_session_duration(self, obj):
         """Calculate session duration"""

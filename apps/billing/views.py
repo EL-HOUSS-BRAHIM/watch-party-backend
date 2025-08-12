@@ -4,7 +4,7 @@ Billing views for Watch Party Backend
 
 import stripe
 from decimal import Decimal
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
@@ -12,6 +12,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.conf import settings
 from django.db import transaction
+from drf_spectacular.utils import extend_schema
 from .models import (
     SubscriptionPlan, Subscription, PaymentMethod, 
     Invoice, Payment, BillingAddress, PromotionalCode
@@ -205,8 +206,10 @@ class SubscriptionDetailView(generics.RetrieveAPIView):
 class SubscriptionCancelView(generics.GenericAPIView):
     """Cancel current user's subscription"""
     
+    serializer_class = serializers.Serializer
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="SubscriptionCancelView POST")
     def post(self, request):
         user = request.user
         cancel_immediately = request.data.get('cancel_immediately', False)
@@ -262,6 +265,7 @@ class SubscriptionResumeView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="SubscriptionResumeView POST")
     def post(self, request):
         user = request.user
         
@@ -304,6 +308,10 @@ class PaymentMethodsView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        # Handle schema generation when there's no user
+        if getattr(self, 'swagger_fake_view', False):
+            return PaymentMethod.objects.none()
+        
         return self.request.user.payment_methods.filter(is_active=True).order_by('-is_default', '-created_at')
     
     def create(self, request, *args, **kwargs):
@@ -479,6 +487,10 @@ class BillingHistoryView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        # Handle schema generation when there's no user
+        if getattr(self, 'swagger_fake_view', False):
+            return Invoice.objects.none()
+        
         return Invoice.objects.filter(
             user=self.request.user
         ).order_by('-created_at')

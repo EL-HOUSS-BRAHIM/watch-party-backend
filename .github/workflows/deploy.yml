@@ -218,6 +218,11 @@ jobs:
           echo "ENVIRONMENT=production" >> "$OUT"
           echo "DEBUG=False" >> "$OUT"
           echo "RATE_LIMIT_ENABLED=True" >> "$OUT"
+          # Security settings for production
+          echo "SECURE_SSL_REDIRECT=True" >> "$OUT"
+          echo "SECURE_HSTS_SECONDS=31536000" >> "$OUT"
+          echo "SESSION_COOKIE_SECURE=True" >> "$OUT"
+          echo "CSRF_COOKIE_SECURE=True" >> "$OUT"
           echo "✅ Generated .env.generated with $(wc -l < "$OUT") environment variables"
           echo "📋 Environment variables included:"
           grep -E '^[A-Z_]+=.*$' "$OUT" | cut -d'=' -f1 | sort
@@ -436,8 +441,9 @@ jobs:
               --bind 127.0.0.1:8000 \\
               --workers 2 \\
               --worker-class gevent \\
-              --worker-connections 1000 \\
-              --max-requests 1000 \\
+              --worker-connections 500 \\
+              --max-requests 500 \\
+              --max-requests-jitter 50 \\
               --timeout 30 \\
               --keep-alive 5 \\
               --access-logfile /var/log/watchparty/access.log \\

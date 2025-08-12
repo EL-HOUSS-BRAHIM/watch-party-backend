@@ -3,6 +3,8 @@ Notifications serializers for Watch Party Backend
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
 from .models import (
     Notification, NotificationPreferences, NotificationTemplate, 
@@ -101,7 +103,7 @@ class NotificationPreferencesSerializer(serializers.ModelSerializer):
         model = NotificationPreferences
         fields = [
             'id', 'notifications_enabled', 'quiet_hours_start', 'quiet_hours_end',
-            'timezone', 'in_app_enabled', 'email_enabled', 'push_enabled', 'sms_enabled',
+            'user_timezone', 'in_app_enabled', 'email_enabled', 'push_enabled', 'sms_enabled',
             'party_invites', 'party_updates', 'friend_requests', 'video_updates',
             'system_updates', 'billing_notifications', 'security_alerts', 'marketing_emails',
             'email_frequency', 'push_token', 'push_device_type',
@@ -117,7 +119,7 @@ class NotificationPreferencesSerializer(serializers.ModelSerializer):
         """Validate quiet hours end time"""
         return value
     
-    def validate_timezone(self, value):
+    def validate_user_timezone(self, value):
         """Validate timezone"""
         import pytz
         try:

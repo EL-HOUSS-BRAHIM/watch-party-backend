@@ -3,6 +3,8 @@ User serializers for Watch Party Backend
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
 from django.db import models
 from .models import Friendship, UserActivity, UserSettings
@@ -23,6 +25,9 @@ class UserSerializer(serializers.ModelSerializer):
             'avatar_url', 'is_premium', 'date_joined'
         ]
         read_only_fields = ['id', 'email', 'date_joined', 'is_premium']
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_avatar_url(self, obj):
         """Get avatar URL or None"""
@@ -51,6 +56,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'email', 'date_joined', 'is_premium', 'friends_count']
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_avatar_url(self, obj):
         """Get avatar URL or None"""
         if obj.avatar:
@@ -60,12 +68,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return obj.avatar.url
         return None
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_friends_count(self, obj):
         """Get number of friends"""
         return Friendship.objects.filter(
             models.Q(from_user=obj, status='accepted') |
             models.Q(to_user=obj, status='accepted')
         ).count()
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_profile(self, obj):
         """Get user profile data"""
@@ -173,6 +187,9 @@ class UserSearchSerializer(serializers.ModelSerializer):
             'is_friend', 'friendship_status', 'is_online'
         ]
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_avatar_url(self, obj):
         """Get avatar URL or None"""
         if obj.avatar:
@@ -182,6 +199,9 @@ class UserSearchSerializer(serializers.ModelSerializer):
             return obj.avatar.url
         return None
     
+    @extend_schema_field(OpenApiTypes.BOOL)
+
+    
     def get_is_friend(self, obj):
         """Check if current user is friends with this user"""
         request_user = self.context['request'].user
@@ -189,6 +209,9 @@ class UserSearchSerializer(serializers.ModelSerializer):
             models.Q(from_user=request_user, to_user=obj, status='accepted') |
             models.Q(from_user=obj, to_user=request_user, status='accepted')
         ).exists()
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_friendship_status(self, obj):
         """Get friendship status with current user"""

@@ -3,6 +3,8 @@ Party serializers for Watch Party Backend
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from apps.videos.serializers import VideoSerializer
@@ -25,6 +27,9 @@ class PartyParticipantSerializer(serializers.ModelSerializer):
             'joined_at', 'last_seen'
         ]
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_user(self, obj):
         return {
             'id': str(obj.user.id),
@@ -32,6 +37,9 @@ class PartyParticipantSerializer(serializers.ModelSerializer):
             'avatar': obj.user.avatar.url if obj.user.avatar else None,
             'is_premium': obj.user.is_premium
         }
+    
+    @extend_schema_field(OpenApiTypes.BOOL)
+
     
     def get_is_online(self, obj):
         # Consider user online if last seen within 5 minutes
@@ -59,6 +67,9 @@ class WatchPartySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'host', 'room_code', 'created_at', 'updated_at']
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_host(self, obj):
         return {
             'id': str(obj.host.id),
@@ -66,6 +77,9 @@ class WatchPartySerializer(serializers.ModelSerializer):
             'avatar': obj.host.avatar.url if obj.host.avatar else None,
             'is_premium': obj.host.is_premium
         }
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_can_join(self, obj):
         request = self.context.get('request')
@@ -90,6 +104,9 @@ class WatchPartySerializer(serializers.ModelSerializer):
         
         return True
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_can_edit(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
@@ -108,6 +125,9 @@ class WatchPartyDetailSerializer(WatchPartySerializer):
             'participants', 'current_timestamp', 'current_timestamp_formatted',
             'is_playing', 'last_sync_at'
         ]
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_current_timestamp_formatted(self, obj):
         if obj.current_timestamp:
@@ -178,6 +198,9 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'moderation_status', 'created_at', 'updated_at']
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_user(self, obj):
         if obj.user:
             return {
@@ -188,6 +211,9 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_reply_to_message(self, obj):
         if obj.reply_to:
             return {
@@ -196,6 +222,9 @@ class ChatMessageSerializer(serializers.ModelSerializer):
                 'user': obj.reply_to.user.full_name if obj.reply_to.user else 'System'
             }
         return None
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_can_edit(self, obj):
         request = self.context.get('request')
@@ -216,6 +245,9 @@ class PartyReactionSerializer(serializers.ModelSerializer):
             'created_at'
         ]
         read_only_fields = ['id', 'user', 'created_at']
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_user(self, obj):
         return {
@@ -241,12 +273,18 @@ class PartyInvitationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'inviter', 'created_at', 'responded_at']
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_inviter(self, obj):
         return {
             'id': str(obj.inviter.id),
             'name': obj.inviter.full_name,
             'avatar': obj.inviter.avatar.url if obj.inviter.avatar else None
         }
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_invitee(self, obj):
         return {
@@ -312,11 +350,17 @@ class PartyReportSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'reporter', 'created_at', 'updated_at']
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_reporter(self, obj):
         return {
             'id': str(obj.reporter.id),
             'name': obj.reporter.full_name
         }
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_reported_user(self, obj):
         if obj.reported_user:

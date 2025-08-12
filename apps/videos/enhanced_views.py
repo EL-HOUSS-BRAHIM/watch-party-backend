@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from services.video_service import video_storage_service, video_processing_service, video_streaming_service
 from .models import Video
 from core.exceptions import VideoError
@@ -19,6 +20,7 @@ class S3VideoUploadView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="S3VideoUploadView POST")
     def post(self, request):
         """Generate presigned URL for S3 upload"""
         try:
@@ -58,6 +60,7 @@ class VideoStreamingUrlView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="VideoStreamingUrlView GET")
     def get(self, request, video_id):
         """Get streaming URL for video"""
         try:
@@ -115,6 +118,7 @@ class VideoThumbnailView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="VideoThumbnailView POST")
     def post(self, request, video_id):
         """Generate thumbnail for video"""
         try:
@@ -151,6 +155,7 @@ class VideoAnalyticsView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(summary="VideoAnalyticsView GET")
     def get(self, request, video_id):
         """Get analytics for video"""
         try:

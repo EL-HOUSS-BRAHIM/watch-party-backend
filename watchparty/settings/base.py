@@ -205,7 +205,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_SCHEMA_CLASS': 'core.api_documentation.EnhancedAutoSchema',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'core.error_handling.enhanced_exception_handler',
 }
 
@@ -392,6 +392,8 @@ SPECTACULAR_SETTINGS = {
         'tagsSorter': 'alpha',
         'tryItOutEnabled': True,
     },
+    # Configuration to handle APIViews without explicit serializers
+    'DISABLE_ERRORS_AND_WARNINGS': True,
     'SWAGGER_UI_DIST': 'SIDECAR',
     'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
     'REDOC_DIST': 'SIDECAR',

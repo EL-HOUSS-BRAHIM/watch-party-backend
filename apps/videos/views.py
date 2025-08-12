@@ -15,6 +15,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
 
 from .models import Video, VideoLike, VideoComment, VideoView, VideoUpload
 from .serializers import (
@@ -242,6 +243,7 @@ class VideoUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     
+    @extend_schema(summary="VideoUploadView POST")
     def post(self, request):
         """Initiate video upload"""
         serializer = VideoUploadCreateSerializer(data=request.data)
@@ -286,6 +288,7 @@ class VideoUploadCompleteView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="VideoUploadCompleteView POST")
     def post(self, request, upload_id):
         """Complete video upload"""
         upload = get_object_or_404(VideoUpload, id=upload_id, user=request.user)
@@ -324,6 +327,7 @@ class VideoSearchView(APIView):
     
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     
+    @extend_schema(summary="VideoSearchView GET")
     def get(self, request):
         """Search videos with advanced filters"""
         serializer = VideoSearchSerializer(data=request.query_params)
@@ -393,6 +397,7 @@ class GoogleDriveMoviesView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="GoogleDriveMoviesView GET")
     def get(self, request):
         """List movies from user's Google Drive"""
         try:
@@ -450,6 +455,7 @@ class GoogleDriveMoviesView(APIView):
                 'message': f'Failed to list movies: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    @extend_schema(summary="GoogleDriveMoviesView POST")
     def post(self, request):
         """Add a Google Drive movie to our database"""
         try:
@@ -524,6 +530,7 @@ class GoogleDriveMovieUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     
+    @extend_schema(summary="GoogleDriveMovieUploadView POST")
     def post(self, request):
         """Upload a movie to Google Drive"""
         try:
@@ -605,6 +612,7 @@ class GoogleDriveMovieDeleteView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="GoogleDriveMovieDeleteView DELETE")
     def delete(self, request, video_id):
         """Delete a movie from Google Drive and our database"""
         try:
@@ -645,6 +653,7 @@ class GoogleDriveMovieStreamView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="GoogleDriveMovieStreamView GET")
     def get(self, request, video_id):
         """Get streaming URL for a Google Drive movie"""
         try:
@@ -714,6 +723,7 @@ class VideoProxyView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="VideoProxyView GET")
     def get(self, request, video_id):
         """Proxy video stream from Google Drive"""
         try:
@@ -1024,6 +1034,7 @@ class VideoProcessingStatusView(APIView):
     """Get video processing status"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="VideoProcessingStatusView GET")
     def get(self, request, video_id):
         try:
             video = get_object_or_404(Video, id=video_id)
@@ -1054,6 +1065,7 @@ class VideoQualityVariantsView(APIView):
     """Get available quality variants for a video"""
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     
+    @extend_schema(summary="VideoQualityVariantsView GET")
     def get(self, request, video_id):
         try:
             video = get_object_or_404(Video, id=video_id)
@@ -1104,6 +1116,7 @@ class RegenerateThumbnailView(APIView):
     """Regenerate video thumbnail"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="RegenerateThumbnailView POST")
     def post(self, request, video_id):
         try:
             video = get_object_or_404(Video, id=video_id)
@@ -1135,6 +1148,7 @@ class VideoShareView(APIView):
     """Generate shareable links for videos"""
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="VideoShareView POST")
     def post(self, request, video_id):
         try:
             video = get_object_or_404(Video, id=video_id)
@@ -1175,6 +1189,7 @@ class VideoSearchEnhancedView(APIView):
     """Advanced video search with filters"""
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     
+    @extend_schema(summary="VideoSearchEnhancedView GET")
     def get(self, request):
         try:
             query = request.GET.get('q', '')

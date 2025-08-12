@@ -4,6 +4,9 @@ Chat serializers for Watch Party Backend
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from typing import Optional, Dict, Any
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from .models import ChatRoom, ChatMessage, ChatModerationLog, ChatBan
 
 User = get_user_model()
@@ -67,7 +70,8 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             'moderation_status', 'created_at', 'updated_at'
         ]
     
-    def get_reply_to_message(self, obj):
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_reply_to_message(self, obj) -> Optional[Dict[str, Any]]:
         """Get basic info about the message being replied to"""
         if obj.reply_to and obj.reply_to.is_visible:
             return {
@@ -131,7 +135,8 @@ class ChatModerationLogSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'moderator', 'message_preview', 'is_active', 'created_at']
     
-    def get_message_preview(self, obj):
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_message_preview(self, obj) -> Optional[Dict[str, Any]]:
         """Get preview of the moderated message"""
         if obj.message:
             return {
@@ -178,19 +183,23 @@ class ChatRoomStatsSerializer(serializers.ModelSerializer):
             'active_messages', 'total_users', 'banned_users_count'
         ]
     
-    def get_total_messages(self, obj):
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_total_messages(self, obj) -> int:
         """Get total message count"""
         return obj.messages.count()
     
-    def get_active_messages(self, obj):
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_active_messages(self, obj) -> int:
         """Get active message count"""
         return obj.messages.filter(moderation_status='active').count()
     
-    def get_total_users(self, obj):
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_total_users(self, obj) -> int:
         """Get total users who have participated"""
         return obj.messages.values('user').distinct().count()
     
-    def get_banned_users_count(self, obj):
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_banned_users_count(self, obj) -> int:
         """Get banned users count"""
         return obj.banned_users.filter(is_active=True).count()
 

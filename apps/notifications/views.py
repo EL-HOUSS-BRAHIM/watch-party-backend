@@ -2,13 +2,14 @@
 Notifications views for Watch Party Backend
 """
 
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Q, Count
+from drf_spectacular.utils import extend_schema
 from datetime import timedelta
 from core.permissions import IsAdminUser
 from .models import Notification, NotificationPreferences, NotificationTemplate, NotificationDelivery
@@ -27,6 +28,10 @@ class NotificationListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        # Handle schema generation when there's no user
+        if getattr(self, 'swagger_fake_view', False):
+            return Notification.objects.none()
+        
         user = self.request.user
         queryset = user.notifications.filter(
             Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
@@ -84,8 +89,10 @@ class NotificationDetailView(generics.RetrieveAPIView):
 class MarkAsReadView(generics.GenericAPIView):
     """Mark notifications as read"""
     
+    serializer_class = serializers.Serializer
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="MarkAsReadView POST")
     def post(self, request, *args, **kwargs):
         user = request.user
         notification_ids = request.data.get('notification_ids', [])
@@ -133,6 +140,7 @@ class MarkAsReadSingleView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="MarkAsReadSingleView POST")
     def post(self, request, notification_id):
         notification = get_object_or_404(
             Notification, 
@@ -152,6 +160,7 @@ class DismissNotificationView(generics.GenericAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="DismissNotificationView DELETE")
     def delete(self, request, notification_id):
         notification = get_object_or_404(
             Notification, 
@@ -250,8 +259,10 @@ class SendNotificationView(generics.CreateAPIView):
 class BulkNotificationView(generics.GenericAPIView):
     """Send bulk notifications (admin only)"""
     
+    serializer_class = serializers.Serializer
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     
+    @extend_schema(summary="BulkNotificationView POST")
     def post(self, request):
         template_id = request.data.get('template_id')
         user_filters = request.data.get('user_filters', {})
@@ -310,8 +321,10 @@ class BulkNotificationView(generics.GenericAPIView):
 class NotificationStatsView(generics.GenericAPIView):
     """Get notification statistics for user"""
     
+    serializer_class = serializers.Serializer
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(summary="NotificationStatsView GET")
     def get(self, request):
         user = request.user
         
@@ -401,8 +414,10 @@ class AdminNotificationTemplateDetailView(generics.RetrieveUpdateDestroyAPIView)
 class AdminNotificationStatsView(generics.GenericAPIView):
     """Get system-wide notification statistics (admin only)"""
     
+    serializer_class = serializers.Serializer
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     
+    @extend_schema(summary="AdminNotificationStatsView GET")
     def get(self, request):
         # Overall stats
         total_notifications = Notification.objects.count()
@@ -692,8 +707,10 @@ class NotificationTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class NotificationChannelListView(generics.ListAPIView):
     """List notification channels (Admin only)"""
+    serializer_class = serializers.Serializer
     permission_classes = [IsAdminUser]
     
+    @extend_schema(summary="NotificationChannelListView GET")
     def get(self, request):
         from .models import NotificationChannel
         channels = NotificationChannel.objects.select_related('user').all()

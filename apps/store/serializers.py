@@ -3,6 +3,8 @@ Serializers for Store app
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from .models import (
     StoreItem, UserInventory, Achievement, UserAchievement,
     Reward, UserRewardClaim, UserCurrency, CurrencyTransaction
@@ -22,6 +24,9 @@ class StoreItemSerializer(serializers.ModelSerializer):
             'image', 'icon', 'is_active', 'is_limited_time', 'available_until',
             'metadata', 'is_available', 'is_owned', 'created_at'
         ]
+    
+    @extend_schema_field(OpenApiTypes.BOOL)
+
     
     def get_is_owned(self, obj):
         """Check if current user owns this item"""
@@ -56,12 +61,18 @@ class AchievementSerializer(serializers.ModelSerializer):
             'achievement_type', 'rarity', 'is_hidden', 'is_unlocked', 'progress'
         ]
     
+    @extend_schema_field(OpenApiTypes.BOOL)
+
+    
     def get_is_unlocked(self, obj):
         """Check if current user has unlocked this achievement"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return UserAchievement.objects.filter(user=request.user, achievement=obj).exists()
         return False
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_progress(self, obj):
         """Get user's progress towards this achievement"""
@@ -100,6 +111,9 @@ class RewardSerializer(serializers.ModelSerializer):
             'next_claim_time', 'items_list'
         ]
     
+    @extend_schema_field(OpenApiTypes.STR)
+
+    
     def get_can_claim(self, obj):
         """Check if current user can claim this reward"""
         request = self.context.get('request')
@@ -108,6 +122,9 @@ class RewardSerializer(serializers.ModelSerializer):
             # This would need to be implemented based on specific requirements logic
             return True  # Placeholder
         return False
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_next_claim_time(self, obj):
         """Get when user can next claim this reward"""
@@ -125,6 +142,9 @@ class RewardSerializer(serializers.ModelSerializer):
             except UserRewardClaim.DoesNotExist:
                 pass
         return None
+    
+    @extend_schema_field(OpenApiTypes.STR)
+
     
     def get_items_list(self, obj):
         """Get items included in this reward"""
