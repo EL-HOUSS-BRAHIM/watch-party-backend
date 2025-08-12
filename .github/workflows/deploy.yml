@@ -277,9 +277,16 @@ jobs:
           fi
           
           cd "$DEPLOY_DIR"
-          if [[ ! -d venv ]]; then
-            echo "🛠 Creating virtual environment as $SERVICE_USER..."
-            sudo -u $SERVICE_USER -H python3 -m venv venv
+          # Recreate venv if missing or incomplete
+          if [[ ! -d venv || ! -f venv/bin/activate ]]; then
+            echo "🛠 (Re)creating virtual environment..."
+            rm -rf venv || true
+            sudo -u $SERVICE_USER -H python3 -m venv venv || { echo "❌ Failed to create venv"; ls -l ; exit 1; }
+          else
+            echo "✅ Existing virtual environment directory detected"
+          fi
+          if [[ ! -f venv/bin/activate ]]; then
+            echo "❌ venv/bin/activate still missing after creation attempt"; find venv -maxdepth 2 -type f -ls || true; exit 1;
           fi
           source venv/bin/activate
           python -m ensurepip --upgrade || true
