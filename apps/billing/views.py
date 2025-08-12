@@ -21,7 +21,7 @@ from .serializers import (
     PaymentMethodSerializer, InvoiceSerializer, PaymentSerializer,
     BillingAddressSerializer, PromotionalCodeSerializer,
     PaymentMethodSetDefaultSerializer, InvoiceDownloadSerializer,
-    PromotionalCodeValidateSerializer
+    PromotionalCodeValidateSerializer, StripeSubscriptionCreateSerializer
 )
 
 User = get_user_model()
