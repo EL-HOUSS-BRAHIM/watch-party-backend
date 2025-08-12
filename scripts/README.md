@@ -38,6 +38,7 @@ watch-party-backend/
     ├── health.sh         # Health checks and monitoring
     ├── monitoring.sh     # System monitoring and logs
     ├── check-logs.sh     # Log configuration diagnostics
+    ├── diagnose-gunicorn.sh # Comprehensive Gunicorn service diagnostics
     ├── deployment.sh     # Deployment operations
     └── nginx-config.sh   # Nginx configuration
 ```
@@ -164,6 +165,28 @@ Real-time monitoring and log viewing:
 ./scripts/monitoring.sh performance     # Performance metrics
 ./scripts/monitoring.sh errors 6        # Errors from last 6 hours
 ```
+
+### Gunicorn Diagnostics Script (`scripts/diagnose-gunicorn.sh`)
+Comprehensive diagnostic tool for troubleshooting Gunicorn service issues:
+
+```bash
+# Must run with sudo
+sudo ./scripts/diagnose-gunicorn.sh                  # Full diagnostics
+sudo ./scripts/diagnose-gunicorn.sh --manual-test   # Include manual service test
+
+# Via main script
+./manage.sh diagnose-gunicorn                       # If integrated
+```
+
+Features:
+- System resource analysis (memory, disk, CPU, file limits)
+- Port conflict detection
+- Service status and process information
+- Application file and permission checks
+- Python environment testing
+- Log file analysis
+- Manual Gunicorn testing
+- Automated recommendations
 
 ### Log Diagnostics Script (`scripts/check-logs.sh`)
 Diagnose logging configuration and troubleshoot issues:

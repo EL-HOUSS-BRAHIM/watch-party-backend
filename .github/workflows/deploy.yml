@@ -228,10 +228,18 @@ jobs:
 
           echo "Installing base packages (idempotent)"
           if command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get install -y python3 python3-venv python3-pip python3-dev build-essential libpq-dev rsync curl git || true
+            sudo apt-get install -y python3 python3-venv python3-pip python3-dev build-essential libpq-dev rsync curl git netcat-traditional || true
           else
-            sudo $INSTALLER python3 python3-pip rsync curl git || true
+            sudo $INSTALLER python3 python3-pip rsync curl git netcat || true
           fi
+
+          # Increase system limits for the deployment
+          echo "Configuring system limits..."
+          echo "* soft nofile 65536" | sudo tee -a /etc/security/limits.conf >/dev/null || true
+          echo "* hard nofile 65536" | sudo tee -a /etc/security/limits.conf >/dev/null || true
+          
+          # Set current session limits
+          ulimit -n 65536 2>/dev/null || true
 
           # Create service user if missing
           if ! id "$SERVICE_USER" >/dev/null 2>&1; then
@@ -317,25 +325,89 @@ jobs:
           sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
           sudo -u $SERVICE_USER -H bash -c 'source venv/bin/activate && python manage.py migrate --noinput || true && python manage.py collectstatic --noinput || true'
 
+          # Pre-deployment diagnostics and cleanup
+          echo "🔍 Running pre-deployment diagnostics..."
+          
+          # Check for port conflicts
+          if sudo lsof -i :8000 >/dev/null 2>&1; then
+            echo "Port 8000 is in use. Identifying and stopping conflicting processes..."
+            sudo lsof -i :8000 || true
+            # Kill any processes using port 8000
+            sudo fuser -k 8000/tcp 2>/dev/null || true
+            sleep 2
+          fi
+          
+          # Check system resources
+          echo "System memory: $(free -h | grep 'Mem:' | awk '{print $2 " total, " $7 " available"}')"
+          echo "Disk space: $(df -h $DEPLOY_DIR | tail -1 | awk '{print $4 " available"}')"
+          echo "Open file limit: $(ulimit -n)"
+          
+          # Stop existing service gracefully
+          if sudo systemctl is-active --quiet watchparty-gunicorn 2>/dev/null; then
+            echo "Stopping existing Gunicorn service..."
+            sudo systemctl stop watchparty-gunicorn || true
+            sleep 3
+          fi
+          
           # Systemd service creation (idempotent)
           if [[ ! -f /etc/systemd/system/watchparty-gunicorn.service ]]; then
             cat > /tmp/watchparty-gunicorn.service << EOF
           [Unit]
           Description=Watch Party Gunicorn Application Server
           After=network.target
+          Wants=network-online.target
+          After=network-online.target
 
           [Service]
-          Type=simple
+          Type=notify
           User=$SERVICE_USER
           Group=$SERVICE_GROUP
           WorkingDirectory=$DEPLOY_DIR
           EnvironmentFile=$DEPLOY_DIR/.env
-          ExecStart=$DEPLOY_DIR/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 --worker-class gevent --access-logfile /var/log/watchparty/access.log --error-logfile /var/log/watchparty/error.log watchparty.wsgi:application
-          Restart=on-failure
-          RestartSec=5
+          Environment=PYTHONPATH=$DEPLOY_DIR
+          Environment=PATH=$DEPLOY_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin
+          
+          # Resource limits
+          LimitNOFILE=65536
+          LimitNPROC=4096
+          MemoryMax=1G
+          
+          # Pre-start checks
+          ExecStartPre=/bin/bash -c 'test -f $DEPLOY_DIR/.env || (echo ".env file missing" && exit 1)'
+          ExecStartPre=/bin/bash -c 'test -f $DEPLOY_DIR/venv/bin/gunicorn || (echo "Gunicorn binary missing" && exit 1)'
+          ExecStartPre=/bin/bash -c 'test -d /var/log/watchparty || mkdir -p /var/log/watchparty'
+          ExecStartPre=/bin/bash -c 'chown -R $SERVICE_USER:$SERVICE_GROUP /var/log/watchparty'
+          
+          # Main service command
+          ExecStart=$DEPLOY_DIR/venv/bin/gunicorn \\
+              --bind 127.0.0.1:8000 \\
+              --workers 2 \\
+              --worker-class gevent \\
+              --worker-connections 1000 \\
+              --max-requests 1000 \\
+              --timeout 30 \\
+              --keep-alive 5 \\
+              --access-logfile /var/log/watchparty/access.log \\
+              --error-logfile /var/log/watchparty/error.log \\
+              --log-level info \\
+              --preload \\
+              watchparty.wsgi:application
+          
+          # Process management
+          ExecReload=/bin/kill -s HUP \$MAINPID
           KillMode=mixed
-          TimeoutStopSec=10
+          KillSignal=SIGTERM
+          TimeoutStartSec=60
+          TimeoutStopSec=30
+          Restart=on-failure
+          RestartSec=10
+          
+          # Security settings
+          NoNewPrivileges=true
           PrivateTmp=true
+          ProtectSystem=strict
+          ReadWritePaths=$DEPLOY_DIR /var/log/watchparty /tmp
+          ProtectHome=true
 
           [Install]
           WantedBy=multi-user.target
@@ -345,7 +417,8 @@ jobs:
             sudo systemctl enable watchparty-gunicorn
           fi
 
-          # Final check - ensure logs directory exists before starting service
+          # Final check - ensure all dependencies are in place before starting service
+          echo "🔧 Final pre-start verification..."
           sudo mkdir -p /var/log/watchparty "$DEPLOY_DIR/logs"
           sudo touch /var/log/watchparty/django.log
           sudo touch /var/log/watchparty/django_errors.log
@@ -359,10 +432,72 @@ jobs:
           sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log /var/log/watchparty/access.log /var/log/watchparty/error.log || true
           sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
 
-          sudo systemctl restart watchparty-gunicorn || sudo systemctl start watchparty-gunicorn
+          # Verify critical files exist
+          if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
+            echo "❌ .env file missing - cannot start service"
+            exit 1
+          fi
+          
+          if [[ ! -f "$DEPLOY_DIR/venv/bin/gunicorn" ]]; then
+            echo "❌ Gunicorn binary missing - cannot start service"
+            exit 1
+          fi
+          
+          # Test Python environment
+          echo "🐍 Testing Python environment..."
+          sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && python -c 'import django; print(f\"Django version: {django.get_version()}\")'" || {
+            echo "❌ Python environment test failed"
+            exit 1
+          }
+          
+          # Test Django configuration
+          echo "🔧 Testing Django configuration..."
+          sudo -u $SERVICE_USER -H bash -c "cd $DEPLOY_DIR && source venv/bin/activate && python manage.py check --deploy" || {
+            echo "❌ Django configuration check failed"
+            # Don't exit - this might be non-critical
+          }
+
+          # Start the service with comprehensive error handling
+          echo "🚀 Starting Gunicorn service..."
+          if sudo systemctl start watchparty-gunicorn; then
+            echo "✅ Service start command succeeded"
+            
+            # Wait for service to stabilize
+            sleep 10
+            
+            # Check service status
+            if sudo systemctl is-active --quiet watchparty-gunicorn; then
+              echo "✅ Gunicorn service is running"
+            else
+              echo "❌ Service failed to start properly"
+              sudo systemctl status watchparty-gunicorn --no-pager -l || true
+              sudo journalctl -xeu watchparty-gunicorn --no-pager -l || true
+              exit 1
+            fi
+            
+            # Test port binding
+            if ss -tlnp | grep :8000 >/dev/null; then
+              echo "✅ Service is listening on port 8000"
+            else
+              echo "❌ Service is not listening on port 8000"
+              exit 1
+            fi
+          else
+            echo "❌ Service start command failed"
+            sudo systemctl status watchparty-gunicorn --no-pager -l || true
+            sudo journalctl -xeu watchparty-gunicorn --no-pager -l || true
+            exit 1
+          fi
 
           echo "Health check"
-          curl -f http://127.0.0.1:8000/health/ >/dev/null 2>&1 && echo "App OK" || echo "App health failed"
+          # Give the application time to fully initialize
+          sleep 5
+          if curl -f -m 10 http://127.0.0.1:8000/health/ >/dev/null 2>&1; then
+            echo "✅ Application health check passed"
+          else
+            echo "❌ Application health check failed"
+            # Don't exit here - the service might be starting slowly
+          fi
           SCRIPT
           chmod +x ci_remote_deploy.sh
       - name: Deploy to server
@@ -414,35 +549,92 @@ jobs:
           # Wait a moment for services to stabilize
           sleep 10
           
-          # Check service status
+          # Check service status with comprehensive diagnostics
           echo "Checking systemd services..."
           ssh $SERVER_USER@$SERVER_HOST "
             echo '=== Gunicorn Service Status ==='
             sudo systemctl status watchparty-gunicorn --no-pager -l || true
             echo
+            echo '=== Service Process Info ==='
+            if sudo systemctl is-active --quiet watchparty-gunicorn; then
+              PID=\$(sudo systemctl show watchparty-gunicorn --property=MainPID --value)
+              if [[ \"\$PID\" != \"0\" ]]; then
+                echo \"Main PID: \$PID\"
+                ps -p \"\$PID\" -o pid,ppid,user,cmd || true
+                echo \"Process listening on ports:\"
+                ss -tlnp | grep \"\$PID\" || echo 'No ports found for this PID'
+              fi
+            else
+              echo 'Service is not active'
+            fi
+            echo
+            echo '=== Port 8000 Status ==='
+            if ss -tlnp | grep :8000; then
+              echo 'Port 8000 is in use'
+            else
+              echo 'Port 8000 is not in use'
+            fi
+            echo
+            echo '=== Recent Service Logs ==='
+            sudo journalctl -u watchparty-gunicorn --no-pager -n 20 || true
+            echo
+            echo '=== Application Logs ==='
+            tail -10 /var/log/watchparty/error.log 2>/dev/null || echo 'No Gunicorn error log found'
+            tail -10 /var/log/watchparty/access.log 2>/dev/null || echo 'No Gunicorn access log found'
+            tail -10 /var/log/watchparty/django_errors.log 2>/dev/null || echo 'No Django error log found'
+            echo '=== Project-level logs (backup) ==='
+            tail -5 /var/www/watch-party-backend/logs/django.log 2>/dev/null || echo 'No project-level Django log found'
+            echo
+            echo '=== System Resources ==='
+            echo \"Memory: \$(free -h | grep 'Mem:' | awk '{print \$7 \" available of \" \$2}')\"
+            echo \"Disk: \$(df -h /var/www/watch-party-backend | tail -1 | awk '{print \$4 \" available\"}')\\"
+            echo \"Load: \$(uptime | awk -F'load average:' '{print \$2}')\"
+            echo
             echo '=== Nginx Service Status ==='
             sudo systemctl status nginx --no-pager -l || true
-            echo
-            echo '=== Recent Logs ==='
-            tail -20 /var/log/watchparty/error.log 2>/dev/null || echo 'No Gunicorn error log found'
-            tail -20 /var/log/watchparty/django_errors.log 2>/dev/null || echo 'No Django error log found'
-            echo '=== Project-level logs (backup) ==='
-            tail -10 /var/www/watch-party-backend/logs/django.log 2>/dev/null || echo 'No project-level Django log found'
           "
           
-          # Test endpoints
+          # Test endpoints with detailed error reporting
           echo "Testing application endpoints..."
-          if ssh $SERVER_USER@$SERVER_HOST "curl -f -m 10 http://127.0.0.1:8000/health/ >/dev/null 2>&1"; then
+          
+          # Test direct application
+          if ssh $SERVER_USER@$SERVER_HOST "curl -f -m 15 -w 'HTTP %{http_code} in %{time_total}s\n' http://127.0.0.1:8000/health/ >/dev/null 2>&1"; then
             echo "✅ Direct application health check passed"
           else
             echo "⚠️ Direct application health check failed"
+            ssh $SERVER_USER@$SERVER_HOST "
+              echo 'Attempting detailed health check...'
+              curl -v -m 15 http://127.0.0.1:8000/health/ 2>&1 || true
+              echo
+              echo 'Checking if anything is listening on port 8000:'
+              ss -tlnp | grep :8000 || echo 'Nothing listening on port 8000'
+            "
           fi
           
-          if ssh $SERVER_USER@$SERVER_HOST "curl -f -m 10 http://127.0.0.1/health/ >/dev/null 2>&1"; then
+          # Test through nginx proxy
+          if ssh $SERVER_USER@$SERVER_HOST "curl -f -m 15 -w 'HTTP %{http_code} in %{time_total}s\n' http://127.0.0.1/health/ >/dev/null 2>&1"; then
             echo "✅ Nginx proxy health check passed"
           else
             echo "⚠️ Nginx proxy health check failed"
+            ssh $SERVER_USER@$SERVER_HOST "
+              echo 'Checking Nginx configuration...'
+              sudo nginx -t || true
+              echo 'Checking Nginx error logs...'
+              tail -10 /var/log/nginx/error.log 2>/dev/null || echo 'No Nginx error log found'
+            "
           fi
+          
+          # Run diagnostic script if service failed
+          ssh $SERVER_USER@$SERVER_HOST "
+            if ! sudo systemctl is-active --quiet watchparty-gunicorn; then
+              echo '=== Running Gunicorn Diagnostics ==='
+              if [[ -f /var/www/watch-party-backend/scripts/diagnose-gunicorn.sh ]]; then
+                sudo /var/www/watch-party-backend/scripts/diagnose-gunicorn.sh 2>&1 | head -100
+              else
+                echo 'Diagnostic script not found'
+              fi
+            fi
+          "
       - name: Notify deployment status
         if: always()
         run: |
