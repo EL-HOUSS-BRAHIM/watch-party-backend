@@ -195,6 +195,8 @@ jobs:
           echo "ENVIRONMENT=production" >> "$OUT"
           echo "DEBUG=False" >> "$OUT"
           echo "RATE_LIMIT_ENABLED=True" >> "$OUT"
+          echo "✅ Generated .env.generated with $(wc -l < "$OUT") environment variables"
+          ls -la deployment-package/.env.generated
       - name: Prepare remote deploy script
         env:
           SERVER_USER: ${{ secrets.SERVER_USER }}
@@ -251,7 +253,7 @@ jobs:
           sudo chown -R $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR" /var/log/watchparty
 
           echo "📤 Syncing project files to $DEPLOY_DIR";
-          sudo rsync -av --delete --exclude='venv' --exclude='.env' --chown=$SERVICE_USER:$SERVICE_GROUP ./ "$DEPLOY_DIR/"
+          sudo rsync -av --delete --exclude='venv' --exclude='.env' --exclude='.env.generated' --chown=$SERVICE_USER:$SERVICE_GROUP ./ "$DEPLOY_DIR/"
 
           # Ensure application log directory exists AFTER rsync (matching Django settings)
           sudo mkdir -p /var/log/watchparty "$DEPLOY_DIR/logs"
@@ -269,11 +271,19 @@ jobs:
           sudo chmod 664 /var/log/watchparty/django.log /var/log/watchparty/django_errors.log /var/log/watchparty/access.log /var/log/watchparty/error.log || true
           sudo chmod 664 "$DEPLOY_DIR/logs/django.log" "$DEPLOY_DIR/logs/security.log" "$DEPLOY_DIR/logs/performance.log" || true
 
-          # Place env file if provided
-          if [[ -f ./.env.generated && ! -f "$DEPLOY_DIR/.env" ]]; then
-            sudo mv ./.env.generated "$DEPLOY_DIR/.env"
+          # Handle environment file - CRITICAL for service startup
+          echo "🔧 Setting up environment file..."
+          if [[ -f ./.env.generated ]]; then
+            echo "Found .env.generated, placing as $DEPLOY_DIR/.env"
+            sudo cp ./.env.generated "$DEPLOY_DIR/.env"
             sudo chmod 600 "$DEPLOY_DIR/.env"
             sudo chown $SERVICE_USER:$SERVICE_GROUP "$DEPLOY_DIR/.env"
+            echo "✅ Environment file placed successfully"
+          else
+            echo "❌ .env.generated not found - this is a critical error"
+            echo "Available files in current directory:"
+            ls -la || true
+            exit 1
           fi
 
           cd "$DEPLOY_DIR"
@@ -526,12 +536,25 @@ jobs:
           
           # Upload files with progress
           echo "📤 Uploading deployment files..."
+          echo "Files being uploaded:"
+          ls -la deployment-package/
           scp -o StrictHostKeyChecking=no -r deployment-package/* $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
           scp -o StrictHostKeyChecking=no ci_remote_deploy.sh $SERVER_USER@$SERVER_HOST:/tmp/watchparty-deploy/
           
           # Execute deployment with timeout
           echo "⚙️ Executing remote deployment script..."
-          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "cd /tmp/watchparty-deploy && timeout 1200 bash -x ./ci_remote_deploy.sh" || {
+          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "
+            cd /tmp/watchparty-deploy
+            echo '📋 Files received on server:'
+            ls -la
+            echo '📋 Checking for .env.generated:'
+            if [[ -f .env.generated ]]; then
+              echo '✅ .env.generated found with $(wc -l < .env.generated) lines'
+            else
+              echo '❌ .env.generated not found!'
+            fi
+            timeout 1200 bash -x ./ci_remote_deploy.sh
+          " || {
             echo "❌ Deployment script failed or timed out"
             echo "🔍 Checking for any error logs..."
             ssh $SERVER_USER@$SERVER_HOST "tail -50 /var/log/watchparty/error.log 2>/dev/null || echo 'No Gunicorn error log found yet'; tail -50 /var/log/watchparty/django_errors.log 2>/dev/null || echo 'No Django error log found yet'"
