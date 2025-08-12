@@ -10,9 +10,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .models import ChatRoom, ChatMessage, ChatModerationLog, ChatBan
 from .serializers import (
-    ChatMessageSerializer, ChatRoomSerializer, ChatBanSerializer,
-    ChatModerationLogSerializer, ModerateChatSerializer, 
-    UnbanUserSerializer, ChatStatsRequestSerializer
+    ChatMessageSerializer, ChatMessageCreateSerializer, ChatRoomSerializer, 
+    ChatBanSerializer, ChatModerationLogSerializer, ModerateChatSerializer, 
+    UnbanUserSerializer, ChatStatsRequestSerializer, ChatRoomStatsSerializer
 )
 
 User = get_user_model()
@@ -106,7 +106,7 @@ class SendMessageView(generics.CreateAPIView):
 class ModerateChatView(generics.GenericAPIView):
     """Moderate chat messages and users"""
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = ModerateChatSerializer
     
     def post(self, request, *args, **kwargs):
@@ -336,7 +336,7 @@ class BanUserView(generics.CreateAPIView):
 class UnbanUserView(generics.GenericAPIView):
     """Unban a user from chat"""
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = UnbanUserSerializer
     
     def post(self, request, *args, **kwargs):
