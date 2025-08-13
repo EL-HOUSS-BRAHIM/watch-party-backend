@@ -115,25 +115,25 @@ list_secrets() {
 
 drop_all_secrets() {
     local force_mode=false
-    
+
     # Check if --force flag is passed
     if [[ "$1" == "--force" ]]; then
         force_mode=true
     fi
-    
+
     log_warning "This will DELETE ALL repository secrets!"
-    
+
     if ! check_github_cli; then
         log_error "GitHub CLI not found"
         return 1
     fi
-    
+
     if ! check_git_and_auth; then
         log_error "Not authenticated with GitHub CLI or not in a git repository"
         log_info "Run: gh auth login"
         return 1
     fi
-    
+
     # Check if we have proper permissions
     log_info "Checking repository permissions..."
     if ! gh repo view &>/dev/null; then
@@ -141,71 +141,47 @@ drop_all_secrets() {
         log_info "Make sure you have admin access to this repository"
         return 1
     fi
-    
+
     # Confirmation prompt (unless force mode)
     if [[ "$force_mode" == false ]]; then
         echo
         read -p "Are you sure you want to delete ALL secrets? (type 'YES' to confirm): " confirmation
-        
+
         if [[ "$confirmation" != "YES" ]]; then
             log_info "Operation cancelled"
             return 0
         fi
     fi
-    
+
     log_info "Deleting all repository secrets..."
-    
+
     # Get list of secret names
     local secret_names=$(gh secret list --json name | jq -r '.[].name' 2>/dev/null)
-    
+
     if [[ -z "$secret_names" ]]; then
         log_info "No secrets found to delete"
         return 0
     fi
-    
-    local deleted_count=0
+
+    # Delete all secrets in a batch if supported
     local failed_count=0
-    
-    while IFS= read -r secret_name; do
+
+    for secret_name in $secret_names; do
         if [[ -n "$secret_name" ]]; then
             echo "Deleting secret: $secret_name"
-            
-            # Try different approaches to delete the secret
-            local delete_success=false
-            local error_output=""
-            
-            # Method 1: Direct deletion
-            if error_output=$(gh secret delete "$secret_name" 2>&1); then
-                delete_success=true
-            else
-                # Method 2: Try with auto-confirmation
-                if error_output=$(printf "y\n" | gh secret delete "$secret_name" 2>&1); then
-                    delete_success=true
-                fi
-            fi
-            
-            if [[ "$delete_success" == true ]]; then
+
+            if gh secret delete "$secret_name" -y &>/dev/null; then
                 log_success "Deleted: $secret_name"
-                ((deleted_count++))
             else
                 log_warning "Failed to delete: $secret_name"
-                if [[ "$error_output" == *"not found"* ]]; then
-                    log_info "  Reason: Secret not found"
-                elif [[ "$error_output" == *"permission"* ]] || [[ "$error_output" == *"forbidden"* ]]; then
-                    log_info "  Reason: Insufficient permissions"
-                elif [[ "$error_output" == *"unknown flag"* ]]; then
-                    log_info "  Error: Invalid command flag"
-                else
-                    log_info "  Error: $error_output"
-                fi
                 ((failed_count++))
             fi
         fi
-    done <<< "$secret_names"
-    
+    done
+
     echo
     if [[ $failed_count -gt 0 ]]; then
-        log_warning "Deleted $deleted_count secrets, failed to delete $failed_count secrets"
+        log_warning "Failed to delete $failed_count secrets"
         echo
         log_info "Common reasons for deletion failure:"
         log_info "  • Insufficient repository permissions (need admin access)"
@@ -213,7 +189,7 @@ drop_all_secrets() {
         log_info "  • Rate limiting (try again in a few minutes)"
         log_info "  • Secrets may be organization-level secrets (not repository secrets)"
     else
-        log_success "Successfully deleted $deleted_count secrets"
+        log_success "Successfully deleted all secrets"
     fi
 }
 
