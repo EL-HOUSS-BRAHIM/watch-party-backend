@@ -163,25 +163,62 @@ drop_all_secrets() {
         return 0
     fi
 
-    # Delete all secrets in a batch if supported
+    local deleted_count=0
     local failed_count=0
 
-    for secret_name in $secret_names; do
+    # Convert to array for proper iteration
+    local secret_array=()
+    while IFS= read -r line; do
+        if [[ -n "$line" ]]; then
+            secret_array+=("$line")
+        fi
+    done <<< "$secret_names"
+
+    echo "Found ${#secret_array[@]} secrets to delete..."
+    echo
+
+    for secret_name in "${secret_array[@]}"; do
         if [[ -n "$secret_name" ]]; then
             echo "Deleting secret: $secret_name"
-
-            if gh secret delete "$secret_name" -y &>/dev/null; then
+            
+            # Try different methods to delete the secret
+            local delete_success=false
+            local error_output=""
+            
+            # Method 1: Direct deletion with auto-confirmation
+            if error_output=$(echo "y" | gh secret delete "$secret_name" 2>&1); then
+                delete_success=true
+            elif error_output=$(printf "y\n" | gh secret delete "$secret_name" 2>&1); then
+                delete_success=true
+            elif error_output=$(gh secret delete "$secret_name" --confirm 2>&1); then
+                delete_success=true
+            elif error_output=$(gh secret delete "$secret_name" 2>&1); then
+                delete_success=true
+            fi
+            
+            if [[ "$delete_success" == true ]]; then
                 log_success "Deleted: $secret_name"
+                ((deleted_count++))
             else
                 log_warning "Failed to delete: $secret_name"
+                if [[ "$error_output" == *"not found"* ]]; then
+                    log_info "  Reason: Secret not found"
+                elif [[ "$error_output" == *"permission"* ]] || [[ "$error_output" == *"forbidden"* ]]; then
+                    log_info "  Reason: Insufficient permissions"
+                else
+                    log_info "  Error: $error_output"
+                fi
                 ((failed_count++))
             fi
+            
+            # Small delay to avoid rate limiting
+            sleep 0.1
         fi
     done
 
     echo
     if [[ $failed_count -gt 0 ]]; then
-        log_warning "Failed to delete $failed_count secrets"
+        log_warning "Deleted $deleted_count secrets, failed to delete $failed_count secrets"
         echo
         log_info "Common reasons for deletion failure:"
         log_info "  • Insufficient repository permissions (need admin access)"
@@ -189,7 +226,7 @@ drop_all_secrets() {
         log_info "  • Rate limiting (try again in a few minutes)"
         log_info "  • Secrets may be organization-level secrets (not repository secrets)"
     else
-        log_success "Successfully deleted all secrets"
+        log_success "Successfully deleted all $deleted_count secrets"
     fi
 }
 
