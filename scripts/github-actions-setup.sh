@@ -72,9 +72,20 @@ validate_env_file() {
     # Required secrets for deployment
     local required_vars=(
         "SECRET_KEY"
-        "DATABASE_URL"
         "DEPLOY_HOST"
         "DEPLOY_USER"
+        "SSH_PRIVATE_KEY"
+        "DATABASE_URL"
+        "DATABASE_NAME"
+        "DATABASE_USER"
+        "DATABASE_PASSWORD"
+        "DATABASE_HOST"
+        "REDIS_URL"
+        "REDIS_HOST"
+        "REDIS_PASSWORD"
+        "CELERY_BROKER_URL"
+        "CELERY_RESULT_BACKEND"
+        "CHANNEL_LAYERS_CONFIG_HOSTS"
     )
     
     local missing_vars=()
@@ -165,10 +176,10 @@ EMAIL_USE_TLS=True
 # =============================================================================
 # SOCIAL AUTHENTICATION (OPTIONAL)
 # =============================================================================
-GOOGLE_OAUTH2_KEY=your-google-client-id
-GOOGLE_OAUTH2_SECRET=your-google-client-secret
-GITHUB_CLIENT_ID=your-github-client-id
-GITHUB_CLIENT_SECRET=your-github-client-secret
+GOOGLE_OAUTH_CLIENT_ID=your-google-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-google-client-secret
+GITHUB_OAUTH_CLIENT_ID=your-github-client-id
+GITHUB_OAUTH_CLIENT_SECRET=your-github-client-secret
 
 # =============================================================================
 # AWS SETTINGS (OPTIONAL - for S3 storage)

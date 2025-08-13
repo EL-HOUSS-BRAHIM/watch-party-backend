@@ -44,17 +44,82 @@ declare -A DEPLOYMENT_SECRETS=(
     ["DEPLOY_USER"]="ubuntu"
     ["DEPLOY_PORT"]="22"
     ["SSH_PRIVATE_KEY"]="# Add your SSH private key here"
-    # Add these if they're not in .env but needed for deployment
-    ["EMAIL_HOST_USER"]="your-email@gmail.com"
-    ["EMAIL_HOST_PASSWORD"]="your-app-password"
-    ["EMAIL_USE_TLS"]="True"
-    ["GOOGLE_OAUTH2_KEY"]="your-google-client-id"
-    ["GOOGLE_OAUTH2_SECRET"]="your-google-client-secret"
-    ["GITHUB_CLIENT_ID"]="your-github-client-id"
-    ["GITHUB_CLIENT_SECRET"]="your-github-client-secret"
-    ["AWS_ACCESS_KEY_ID"]="your-aws-access-key"
-    ["AWS_SECRET_ACCESS_KEY"]="your-aws-secret-key"
-    ["AWS_STORAGE_BUCKET_NAME"]="your-s3-bucket"
+    # Core Django secrets
+    ["SECRET_KEY"]="your-very-secure-secret-key-here"
+    ["DEBUG"]="False"
+    ["DJANGO_SETTINGS_MODULE"]="watchparty.settings.production"
+    ["ALLOWED_HOSTS"]="be-watch-party.brahim-elhouss.me,127.0.0.1,localhost"
+    ["CSRF_TRUSTED_ORIGINS"]="https://be-watch-party.brahim-elhouss.me,https://watch-party.brahim-elhouss.me"
+    # CORS
+    ["CORS_ALLOWED_ORIGINS"]="https://watch-party.brahim-elhouss.me,https://be-watch-party.brahim-elhouss.me"
+    ["CORS_ALLOW_CREDENTIALS"]="True"
+    # Database
+    ["DATABASE_URL"]="postgresql://username:password@host:5432/database_name"
+    ["DATABASE_NAME"]="watchparty_prod"
+    ["DATABASE_USER"]="watchparty_admin"
+    ["DATABASE_PASSWORD"]="your-database-password"
+    ["DATABASE_HOST"]="your-db-host"
+    ["DATABASE_PORT"]="5432"
+    ["DB_SSL_MODE"]="require"
+    # Redis/Valkey
+    ["REDIS_URL"]="rediss://your-redis-url"
+    ["REDIS_HOST"]="your-redis-host"
+    ["REDIS_PORT"]="6379"
+    ["REDIS_PASSWORD"]="your-redis-password"
+    ["REDIS_USE_SSL"]="True"
+    # Celery
+    ["CELERY_BROKER_URL"]="rediss://your-celery-broker-url"
+    ["CELERY_RESULT_BACKEND"]="rediss://your-celery-result-backend-url"
+    ["CHANNEL_LAYERS_CONFIG_HOSTS"]="rediss://your-channel-layers-url"
+    # Email
+    ["EMAIL_HOST"]="localhost"
+    ["EMAIL_PORT"]="25"
+    ["EMAIL_HOST_USER"]=""
+    ["EMAIL_HOST_PASSWORD"]=""
+    ["DEFAULT_FROM_EMAIL"]="noreply@brahim-elhouss.me"
+    # AWS S3
+    ["USE_S3"]="False"
+    ["AWS_ACCESS_KEY_ID"]=""
+    ["AWS_SECRET_ACCESS_KEY"]=""
+    ["AWS_STORAGE_BUCKET_NAME"]=""
+    ["AWS_S3_REGION_NAME"]="us-east-1"
+    # Security
+    ["SECURE_SSL_REDIRECT"]="True"
+    ["SECURE_PROXY_SSL_HEADER"]="HTTP_X_FORWARDED_PROTO,https"
+    ["SESSION_COOKIE_SECURE"]="True"
+    ["CSRF_COOKIE_SECURE"]="True"
+    ["SECURE_BROWSER_XSS_FILTER"]="True"
+    ["SECURE_CONTENT_TYPE_NOSNIFF"]="True"
+    ["SECURE_HSTS_SECONDS"]="31536000"
+    ["SECURE_HSTS_INCLUDE_SUBDOMAINS"]="True"
+    ["SECURE_HSTS_PRELOAD"]="True"
+    # Static & Media
+    ["MEDIA_URL"]="/media/"
+    ["STATIC_URL"]="/static/"
+    ["MEDIA_ROOT"]="/home/ubuntu/watch-party/back-end/media/"
+    ["STATIC_ROOT"]="/home/ubuntu/watch-party/back-end/staticfiles/"
+    # Environment
+    ["SENTRY_DSN"]=""
+    ["ENVIRONMENT"]="production"
+    # Features
+    ["RATE_LIMIT_ENABLED"]="True"
+    ["ANALYTICS_RETENTION_DAYS"]="365"
+    ["VIDEO_MAX_FILE_SIZE"]="5368709120"
+    ["VIDEO_PROCESSING_TIMEOUT"]="1800"
+    ["WS_MAX_CONNECTIONS_PER_IP"]="20"
+    ["WS_HEARTBEAT_INTERVAL"]="30"
+    ["MAX_PARTY_PARTICIPANTS"]="100"
+    ["ML_PREDICTIONS_ENABLED"]="False"
+    # Celery Workers
+    ["CELERY_TASK_ALWAYS_EAGER"]="False"
+    ["CELERY_TASK_EAGER_PROPAGATES"]="True"
+    ["CELERY_WORKER_CONCURRENCY"]="4"
+    ["CELERY_WORKER_MAX_TASKS_PER_CHILD"]="1000"
+    # AWS Infrastructure IDs (Reference Only)
+    ["VPC_ID"]="vpc-02329bf45f051fa03"
+    ["RDS_SECURITY_GROUP_ID"]="sg-062535db0d4e19a63"
+    ["ELASTICACHE_SECURITY_GROUP_ID"]="sg-04e656800ee20c48b"
+    ["APPLICATION_SECURITY_GROUP_ID"]="sg-0761bedcf95617b85"
 )
 
 check_github_cli() {
@@ -279,10 +344,10 @@ check_missing_deployment_secrets() {
     local optional_secrets=(
         "EMAIL_HOST_USER"
         "EMAIL_HOST_PASSWORD"
-        "GOOGLE_OAUTH2_KEY"
-        "GOOGLE_OAUTH2_SECRET"
-        "GITHUB_CLIENT_ID"
-        "GITHUB_CLIENT_SECRET"
+        "GOOGLE_OAUTH_CLIENT_ID"
+        "GOOGLE_OAUTH_CLIENT_SECRET"
+        "GITHUB_OAUTH_CLIENT_ID"
+        "GITHUB_OAUTH_CLIENT_SECRET"
         "AWS_ACCESS_KEY_ID"
         "AWS_SECRET_ACCESS_KEY"
     )

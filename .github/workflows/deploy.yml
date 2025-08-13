@@ -26,49 +26,96 @@ env:
   DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
   DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
   
+  # Core Django settings (from secrets)
+  SECRET_KEY: ${{ secrets.SECRET_KEY }}
+  DEBUG: ${{ secrets.DEBUG || 'False' }}
+  DJANGO_SETTINGS_MODULE: ${{ secrets.DJANGO_SETTINGS_MODULE || 'watchparty.settings.production' }}
+  ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+  CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
+  
+  # CORS settings (from secrets)
+  CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
+  CORS_ALLOW_CREDENTIALS: ${{ secrets.CORS_ALLOW_CREDENTIALS || 'True' }}
+  
   # Database configuration (from secrets)
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
   DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
   DATABASE_USER: ${{ secrets.DATABASE_USER }}
   DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+  DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
   DATABASE_PORT: ${{ secrets.DATABASE_PORT || '5432' }}
+  DB_SSL_MODE: ${{ secrets.DB_SSL_MODE || 'require' }}
   
-  # Redis configuration (from secrets)
+  # Redis/Valkey configuration (from secrets)
   REDIS_URL: ${{ secrets.REDIS_URL }}
-  REDIS_HOST: ${{ secrets.REDIS_HOST || 'localhost' }}
+  REDIS_HOST: ${{ secrets.REDIS_HOST }}
   REDIS_PORT: ${{ secrets.REDIS_PORT || '6379' }}
+  REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+  REDIS_USE_SSL: ${{ secrets.REDIS_USE_SSL || 'True' }}
   
-  # Django settings (from secrets)
-  SECRET_KEY: ${{ secrets.SECRET_KEY }}
-  DEBUG: ${{ secrets.DEBUG || 'False' }}
-  ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+  # Celery configuration (from secrets)
+  CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
+  CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
+  CHANNEL_LAYERS_CONFIG_HOSTS: ${{ secrets.CHANNEL_LAYERS_CONFIG_HOSTS }}
   
   # Email configuration (from secrets)
-  EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-  EMAIL_PORT: ${{ secrets.EMAIL_PORT || '587' }}
+  EMAIL_HOST: ${{ secrets.EMAIL_HOST || 'localhost' }}
+  EMAIL_PORT: ${{ secrets.EMAIL_PORT || '25' }}
   EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
   EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
-  EMAIL_USE_TLS: ${{ secrets.EMAIL_USE_TLS || 'True' }}
+  DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL || 'noreply@brahim-elhouss.me' }}
   
-  # Security and external services (from secrets)
-  CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
-  CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
-  
-  # Social auth (from secrets)
-  GOOGLE_OAUTH2_KEY: ${{ secrets.GOOGLE_OAUTH2_KEY }}
-  GOOGLE_OAUTH2_SECRET: ${{ secrets.GOOGLE_OAUTH2_SECRET }}
-  GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
-  GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
-  
-  # AWS settings (from secrets)
+  # AWS S3 settings (from secrets)
+  USE_S3: ${{ secrets.USE_S3 || 'False' }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_STORAGE_BUCKET_NAME: ${{ secrets.AWS_STORAGE_BUCKET_NAME }}
-  AWS_S3_REGION_NAME: ${{ secrets.AWS_S3_REGION_NAME }}
+  AWS_S3_REGION_NAME: ${{ secrets.AWS_S3_REGION_NAME || 'us-east-1' }}
   
-  # Additional settings
-  ENVIRONMENT: 'production'
+  # Security settings
+  SECURE_SSL_REDIRECT: ${{ secrets.SECURE_SSL_REDIRECT || 'True' }}
+  SECURE_PROXY_SSL_HEADER: ${{ secrets.SECURE_PROXY_SSL_HEADER || 'HTTP_X_FORWARDED_PROTO,https' }}
+  SESSION_COOKIE_SECURE: ${{ secrets.SESSION_COOKIE_SECURE || 'True' }}
+  CSRF_COOKIE_SECURE: ${{ secrets.CSRF_COOKIE_SECURE || 'True' }}
+  SECURE_BROWSER_XSS_FILTER: ${{ secrets.SECURE_BROWSER_XSS_FILTER || 'True' }}
+  SECURE_CONTENT_TYPE_NOSNIFF: ${{ secrets.SECURE_CONTENT_TYPE_NOSNIFF || 'True' }}
+  SECURE_HSTS_SECONDS: ${{ secrets.SECURE_HSTS_SECONDS || '31536000' }}
+  SECURE_HSTS_INCLUDE_SUBDOMAINS: ${{ secrets.SECURE_HSTS_INCLUDE_SUBDOMAINS || 'True' }}
+  SECURE_HSTS_PRELOAD: ${{ secrets.SECURE_HSTS_PRELOAD || 'True' }}
+  
+  # Static & Media paths
+  MEDIA_URL: ${{ secrets.MEDIA_URL || '/media/' }}
+  STATIC_URL: ${{ secrets.STATIC_URL || '/static/' }}
+  MEDIA_ROOT: ${{ secrets.MEDIA_ROOT || '/home/ubuntu/watch-party/back-end/media/' }}
+  STATIC_ROOT: ${{ secrets.STATIC_ROOT || '/home/ubuntu/watch-party/back-end/staticfiles/' }}
+  
+  # Monitoring & Environment
+  SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+  ENVIRONMENT: ${{ secrets.ENVIRONMENT || 'production' }}
+  
+  # Feature flags
+  RATE_LIMIT_ENABLED: ${{ secrets.RATE_LIMIT_ENABLED || 'True' }}
+  ANALYTICS_RETENTION_DAYS: ${{ secrets.ANALYTICS_RETENTION_DAYS || '365' }}
+  VIDEO_MAX_FILE_SIZE: ${{ secrets.VIDEO_MAX_FILE_SIZE || '5368709120' }}
+  VIDEO_PROCESSING_TIMEOUT: ${{ secrets.VIDEO_PROCESSING_TIMEOUT || '1800' }}
+  WS_MAX_CONNECTIONS_PER_IP: ${{ secrets.WS_MAX_CONNECTIONS_PER_IP || '20' }}
+  WS_HEARTBEAT_INTERVAL: ${{ secrets.WS_HEARTBEAT_INTERVAL || '30' }}
+  MAX_PARTY_PARTICIPANTS: ${{ secrets.MAX_PARTY_PARTICIPANTS || '100' }}
+  ML_PREDICTIONS_ENABLED: ${{ secrets.ML_PREDICTIONS_ENABLED || 'False' }}
+  
+  # Celery worker settings
+  CELERY_TASK_ALWAYS_EAGER: ${{ secrets.CELERY_TASK_ALWAYS_EAGER || 'False' }}
+  CELERY_TASK_EAGER_PROPAGATES: ${{ secrets.CELERY_TASK_EAGER_PROPAGATES || 'True' }}
+  CELERY_WORKER_CONCURRENCY: ${{ secrets.CELERY_WORKER_CONCURRENCY || '4' }}
+  CELERY_WORKER_MAX_TASKS_PER_CHILD: ${{ secrets.CELERY_WORKER_MAX_TASKS_PER_CHILD || '1000' }}
+  
+  # AWS Infrastructure IDs (Reference Only)
+  VPC_ID: ${{ secrets.VPC_ID }}
+  RDS_SECURITY_GROUP_ID: ${{ secrets.RDS_SECURITY_GROUP_ID }}
+  ELASTICACHE_SECURITY_GROUP_ID: ${{ secrets.ELASTICACHE_SECURITY_GROUP_ID }}
+  APPLICATION_SECURITY_GROUP_ID: ${{ secrets.APPLICATION_SECURITY_GROUP_ID }}
+  
+  # Deployment control
   DEPLOYMENT_TYPE: ${{ github.event.inputs.deployment_type || 'update' }}
 
 jobs:
@@ -97,6 +144,12 @@ jobs:
           "SSH_PRIVATE_KEY"
           "SECRET_KEY"
           "DATABASE_URL"
+          "DATABASE_PASSWORD"
+          "REDIS_URL"
+          "REDIS_PASSWORD"
+          "CELERY_BROKER_URL"
+          "CELERY_RESULT_BACKEND"
+          "CHANNEL_LAYERS_CONFIG_HOSTS"
         )
         
         MISSING_SECRETS=()
@@ -106,6 +159,12 @@ jobs:
         if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then MISSING_SECRETS+=("SSH_PRIVATE_KEY"); fi
         if [ -z "${{ secrets.SECRET_KEY }}" ]; then MISSING_SECRETS+=("SECRET_KEY"); fi
         if [ -z "${{ secrets.DATABASE_URL }}" ]; then MISSING_SECRETS+=("DATABASE_URL"); fi
+        if [ -z "${{ secrets.DATABASE_PASSWORD }}" ]; then MISSING_SECRETS+=("DATABASE_PASSWORD"); fi
+        if [ -z "${{ secrets.REDIS_URL }}" ]; then MISSING_SECRETS+=("REDIS_URL"); fi
+        if [ -z "${{ secrets.REDIS_PASSWORD }}" ]; then MISSING_SECRETS+=("REDIS_PASSWORD"); fi
+        if [ -z "${{ secrets.CELERY_BROKER_URL }}" ]; then MISSING_SECRETS+=("CELERY_BROKER_URL"); fi
+        if [ -z "${{ secrets.CELERY_RESULT_BACKEND }}" ]; then MISSING_SECRETS+=("CELERY_RESULT_BACKEND"); fi
+        if [ -z "${{ secrets.CHANNEL_LAYERS_CONFIG_HOSTS }}" ]; then MISSING_SECRETS+=("CHANNEL_LAYERS_CONFIG_HOSTS"); fi
         
         if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
           echo "❌ Missing required secrets: ${MISSING_SECRETS[*]}"
@@ -227,68 +286,131 @@ jobs:
         ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST "
           cd /var/www/watchparty
           
-          # Create production .env file
-          cat > .env << 'EOF'
-        # =============================================================================
-        # WATCH PARTY BACKEND - PRODUCTION ENVIRONMENT
-        # =============================================================================
-        # Generated by GitHub Actions on $(date)
-        # Commit: ${{ github.sha }}
-        
-        # Environment
-        ENVIRONMENT=production
-        DEBUG=$DEBUG
-        
-        # Security
-        SECRET_KEY=$SECRET_KEY
-        ALLOWED_HOSTS=$ALLOWED_HOSTS
-        CORS_ALLOWED_ORIGINS=$CORS_ALLOWED_ORIGINS
-        CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS
-        
-        # Database
-        DATABASE_URL=$DATABASE_URL
-        DATABASE_HOST=$DATABASE_HOST
-        DATABASE_NAME=$DATABASE_NAME
-        DATABASE_USER=$DATABASE_USER
-        DATABASE_PASSWORD=$DATABASE_PASSWORD
-        DATABASE_PORT=$DATABASE_PORT
-        
-        # Redis
-        REDIS_URL=$REDIS_URL
-        REDIS_HOST=$REDIS_HOST
-        REDIS_PORT=$REDIS_PORT
-        
-        # Celery
-        CELERY_BROKER_URL=$REDIS_URL
-        CELERY_RESULT_BACKEND=$REDIS_URL
-        
-        # Email
-        EMAIL_HOST=$EMAIL_HOST
-        EMAIL_PORT=$EMAIL_PORT
-        EMAIL_HOST_USER=$EMAIL_HOST_USER
-        EMAIL_HOST_PASSWORD=$EMAIL_HOST_PASSWORD
-        EMAIL_USE_TLS=$EMAIL_USE_TLS
-        
-        # Social Authentication
-        GOOGLE_OAUTH2_KEY=$GOOGLE_OAUTH2_KEY
-        GOOGLE_OAUTH2_SECRET=$GOOGLE_OAUTH2_SECRET
-        GITHUB_CLIENT_ID=$GITHUB_CLIENT_ID
-        GITHUB_CLIENT_SECRET=$GITHUB_CLIENT_SECRET
-        
-        # AWS (if using)
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-        AWS_STORAGE_BUCKET_NAME=$AWS_STORAGE_BUCKET_NAME
-        AWS_S3_REGION_NAME=$AWS_S3_REGION_NAME
-        
-        # Additional production settings
-        SECURE_SSL_REDIRECT=True
-        SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
-        SESSION_COOKIE_SECURE=True
-        CSRF_COOKIE_SECURE=True
-        SECURE_BROWSER_XSS_FILTER=True
-        SECURE_CONTENT_TYPE_NOSNIFF=True
-        EOF
+          # Create production .env file matching your working .env structure
+          cat > .env << 'ENVEOF'
+# Watch Party Backend Production Environment
+# Generated by GitHub Actions on \$(date)
+# Commit: ${{ github.sha }}
+
+# -----------------------------------------------------------------------------
+# Core Django
+# -----------------------------------------------------------------------------
+DEBUG=\${DEBUG}
+DJANGO_SETTINGS_MODULE=\${DJANGO_SETTINGS_MODULE}
+SECRET_KEY=\${SECRET_KEY}
+ALLOWED_HOSTS=\${ALLOWED_HOSTS}
+CSRF_TRUSTED_ORIGINS=\${CSRF_TRUSTED_ORIGINS}
+
+# -----------------------------------------------------------------------------
+# CORS
+# -----------------------------------------------------------------------------
+CORS_ALLOWED_ORIGINS=\${CORS_ALLOWED_ORIGINS}
+CORS_ALLOW_CREDENTIALS=\${CORS_ALLOW_CREDENTIALS}
+
+# -----------------------------------------------------------------------------
+# Database (AWS RDS PostgreSQL)
+# -----------------------------------------------------------------------------
+DATABASE_URL=\${DATABASE_URL}
+DATABASE_NAME=\${DATABASE_NAME}
+DATABASE_USER=\${DATABASE_USER}
+DATABASE_PASSWORD=\${DATABASE_PASSWORD}
+DATABASE_HOST=\${DATABASE_HOST}
+DATABASE_PORT=\${DATABASE_PORT}
+DB_SSL_MODE=\${DB_SSL_MODE}
+
+# -----------------------------------------------------------------------------
+# Redis / Valkey (ElastiCache)
+# -----------------------------------------------------------------------------
+REDIS_URL=\${REDIS_URL}
+REDIS_HOST=\${REDIS_HOST}
+REDIS_PORT=\${REDIS_PORT}
+REDIS_PASSWORD=\${REDIS_PASSWORD}
+REDIS_USE_SSL=\${REDIS_USE_SSL}
+
+# Celery (Uses Redis/Valkey)
+CELERY_BROKER_URL=\${CELERY_BROKER_URL}
+CELERY_RESULT_BACKEND=\${CELERY_RESULT_BACKEND}
+
+# Django Channels Layer (Redis backend DB 4)
+CHANNEL_LAYERS_CONFIG_HOSTS=\${CHANNEL_LAYERS_CONFIG_HOSTS}
+
+# -----------------------------------------------------------------------------
+# Email (Replace with production SMTP or SES if enabled)
+# -----------------------------------------------------------------------------
+EMAIL_HOST=\${EMAIL_HOST}
+EMAIL_PORT=\${EMAIL_PORT}
+EMAIL_HOST_USER=\${EMAIL_HOST_USER}
+EMAIL_HOST_PASSWORD=\${EMAIL_HOST_PASSWORD}
+DEFAULT_FROM_EMAIL=\${DEFAULT_FROM_EMAIL}
+
+# -----------------------------------------------------------------------------
+# AWS S3 (Optional)
+# -----------------------------------------------------------------------------
+USE_S3=\${USE_S3}
+AWS_ACCESS_KEY_ID=\${AWS_ACCESS_KEY_ID}
+AWS_SECRET_ACCESS_KEY=\${AWS_SECRET_ACCESS_KEY}
+AWS_STORAGE_BUCKET_NAME=\${AWS_STORAGE_BUCKET_NAME}
+AWS_S3_REGION_NAME=\${AWS_S3_REGION_NAME}
+
+# -----------------------------------------------------------------------------
+# Security
+# -----------------------------------------------------------------------------
+SECURE_SSL_REDIRECT=\${SECURE_SSL_REDIRECT}
+SECURE_PROXY_SSL_HEADER=\${SECURE_PROXY_SSL_HEADER}
+SESSION_COOKIE_SECURE=\${SESSION_COOKIE_SECURE}
+CSRF_COOKIE_SECURE=\${CSRF_COOKIE_SECURE}
+SECURE_BROWSER_XSS_FILTER=\${SECURE_BROWSER_XSS_FILTER}
+SECURE_CONTENT_TYPE_NOSNIFF=\${SECURE_CONTENT_TYPE_NOSNIFF}
+SECURE_HSTS_SECONDS=\${SECURE_HSTS_SECONDS}
+SECURE_HSTS_INCLUDE_SUBDOMAINS=\${SECURE_HSTS_INCLUDE_SUBDOMAINS}
+SECURE_HSTS_PRELOAD=\${SECURE_HSTS_PRELOAD}
+
+# -----------------------------------------------------------------------------
+# Static & Media Paths (Server filesystem locations)
+# -----------------------------------------------------------------------------
+MEDIA_URL=\${MEDIA_URL}
+STATIC_URL=\${STATIC_URL}
+MEDIA_ROOT=\${MEDIA_ROOT}
+STATIC_ROOT=\${STATIC_ROOT}
+
+# -----------------------------------------------------------------------------
+# Monitoring & Environment
+# -----------------------------------------------------------------------------
+SENTRY_DSN=\${SENTRY_DSN}
+ENVIRONMENT=\${ENVIRONMENT}
+
+# -----------------------------------------------------------------------------
+# Rate Limiting / Analytics / Video Processing
+# -----------------------------------------------------------------------------
+RATE_LIMIT_ENABLED=\${RATE_LIMIT_ENABLED}
+ANALYTICS_RETENTION_DAYS=\${ANALYTICS_RETENTION_DAYS}
+VIDEO_MAX_FILE_SIZE=\${VIDEO_MAX_FILE_SIZE}
+VIDEO_PROCESSING_TIMEOUT=\${VIDEO_PROCESSING_TIMEOUT}
+
+# -----------------------------------------------------------------------------
+# WebSocket / Parties / ML
+# -----------------------------------------------------------------------------
+WS_MAX_CONNECTIONS_PER_IP=\${WS_MAX_CONNECTIONS_PER_IP}
+WS_HEARTBEAT_INTERVAL=\${WS_HEARTBEAT_INTERVAL}
+MAX_PARTY_PARTICIPANTS=\${MAX_PARTY_PARTICIPANTS}
+ML_PREDICTIONS_ENABLED=\${ML_PREDICTIONS_ENABLED}
+
+# -----------------------------------------------------------------------------
+# Celery Worker Settings
+# -----------------------------------------------------------------------------
+CELERY_TASK_ALWAYS_EAGER=\${CELERY_TASK_ALWAYS_EAGER}
+CELERY_TASK_EAGER_PROPAGATES=\${CELERY_TASK_EAGER_PROPAGATES}
+CELERY_WORKER_CONCURRENCY=\${CELERY_WORKER_CONCURRENCY}
+CELERY_WORKER_MAX_TASKS_PER_CHILD=\${CELERY_WORKER_MAX_TASKS_PER_CHILD}
+
+# -----------------------------------------------------------------------------
+# AWS Infrastructure IDs (Reference Only - non-secret)
+# -----------------------------------------------------------------------------
+VPC_ID=\${VPC_ID}
+RDS_SECURITY_GROUP_ID=\${RDS_SECURITY_GROUP_ID}
+ELASTICACHE_SECURITY_GROUP_ID=\${ELASTICACHE_SECURITY_GROUP_ID}
+APPLICATION_SECURITY_GROUP_ID=\${APPLICATION_SECURITY_GROUP_ID}
+ENVEOF
           
           # Secure the environment file
           chmod 600 .env

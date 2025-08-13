@@ -464,8 +464,8 @@ STATIC_URL=/static/
 # AWS_STORAGE_BUCKET_NAME=your-bucket-name
 
 # Social Authentication
-# GOOGLE_OAUTH2_CLIENT_ID=your-google-client-id
-# GOOGLE_OAUTH2_CLIENT_SECRET=your-google-client-secret
+# GOOGLE_OAUTH_CLIENT_ID=your-google-client-id
+# GOOGLE_OAUTH_CLIENT_SECRET=your-google-client-secret
 EOF
     
     log_success ".env file template created"
