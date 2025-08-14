@@ -56,8 +56,8 @@ NGINX_SITES_ENABLED="/etc/nginx/sites-enabled"
 SYSTEMD_DIR="/etc/systemd/system"
 
 # Default ports
-DEFAULT_HTTP_PORT=8000
-DEFAULT_WEBSOCKET_PORT=8001
+DEFAULT_HTTP_PORT=8001
+DEFAULT_WEBSOCKET_PORT=8002
 DEFAULT_NGINX_HTTP=80
 DEFAULT_NGINX_HTTPS=443
 DEFAULT_POSTGRES_PORT=5432
@@ -766,12 +766,19 @@ deploy_application() {
     cp "$PROD_ENV_FILE" "$PRODUCTION_DIR/.env"
     chmod 600 "$PRODUCTION_DIR/.env"
     
-    # Create virtual environment
+    # Create virtual environment (remove existing if corrupted)
     cd "$PRODUCTION_DIR"
+    if [[ -d "venv" ]]; then
+        log_info "Removing existing virtual environment..."
+        rm -rf venv
+    fi
+    
+    log_info "Creating fresh virtual environment..."
     python3 -m venv venv
     source venv/bin/activate
     
     # Install dependencies
+    log_info "Installing Python dependencies..."
     pip install --upgrade pip setuptools wheel
     pip install -r requirements.txt
     pip install gunicorn gevent
@@ -800,18 +807,7 @@ RuntimeDirectory=watchparty
 WorkingDirectory=$PRODUCTION_DIR
 Environment=PATH=$PRODUCTION_DIR/venv/bin
 EnvironmentFile=$PRODUCTION_DIR/.env
-ExecStart=$PRODUCTION_DIR/venv/bin/gunicorn \\
-    --bind 127.0.0.1:$DEFAULT_HTTP_PORT \\
-    --workers 3 \\
-    --worker-class gevent \\
-    --max-requests 1000 \\
-    --timeout 30 \\
-    --keep-alive 5 \\
-    --preload \\
-    --access-logfile $LOG_DIR/gunicorn_access.log \\
-    --error-logfile $LOG_DIR/gunicorn_error.log \\
-    --log-level info \\
-    watchparty.wsgi:application
+ExecStart=$PRODUCTION_DIR/venv/bin/gunicorn --bind 127.0.0.1:$DEFAULT_HTTP_PORT --workers 3 --worker-class gevent --max-requests 1000 --timeout 30 --keep-alive 5 --preload --access-logfile $LOG_DIR/gunicorn_access.log --error-logfile $LOG_DIR/gunicorn_error.log --log-level info watchparty.wsgi:application
 ExecReload=/bin/kill -s HUP \$MAINPID
 Restart=on-failure
 RestartSec=5
@@ -835,10 +831,7 @@ Group=www-data
 WorkingDirectory=$PRODUCTION_DIR
 Environment=PATH=$PRODUCTION_DIR/venv/bin
 EnvironmentFile=$PRODUCTION_DIR/.env
-ExecStart=$PRODUCTION_DIR/venv/bin/daphne \\
-    -b 127.0.0.1 \\
-    -p $DEFAULT_WEBSOCKET_PORT \\
-    watchparty.asgi:application
+ExecStart=$PRODUCTION_DIR/venv/bin/daphne -b 127.0.0.1 -p $DEFAULT_WEBSOCKET_PORT watchparty.asgi:application
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -1135,13 +1128,21 @@ configure_nginx() {
     sudo rm -f "$NGINX_SITES_AVAILABLE/watchparty"
     
     # Create Watch Party site configuration
-    log_info "Creating Watch Party site configuration..."
+    log_info "Using project nginx configuration (Cloudflare-compatible)..."
     
-    sudo tee "$NGINX_SITES_AVAILABLE/watch-party" > /dev/null << 'NGINX_EOF'
-# Watch Party Backend Nginx Configuration
+    # Copy the nginx configuration from the project
+    if [[ -f "$PROJECT_ROOT/nginx.conf" ]]; then
+        log_info "Copying nginx.conf from project..."
+        sudo cp "$PROJECT_ROOT/nginx.conf" "$NGINX_SITES_AVAILABLE/watch-party"
+        log_success "Nginx configuration copied from project"
+    else
+        log_warning "Project nginx.conf not found, creating basic configuration..."
+        # Fallback configuration if nginx.conf doesn't exist in project
+        sudo tee "$NGINX_SITES_AVAILABLE/watch-party" > /dev/null << 'NGINX_EOF'
+# Watch Party Backend Nginx Configuration - Cloudflare Compatible
 server {
     listen 80;
-    server_name _;
+    server_name be-watch-party.brahim-elhouss.me watch-party.brahim-elhouss.me _;
 
     # Logging
     access_log /var/log/watchparty/nginx_access.log;
@@ -1151,6 +1152,10 @@ server {
     client_body_timeout 300s;
     client_header_timeout 300s;
     
+    # Trust Cloudflare IPs - Get real client IP
+    real_ip_header CF-Connecting-IP;
+    real_ip_recursive on;
+    
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
@@ -1159,11 +1164,12 @@ server {
 
     # Static files
     location /static/ {
-        alias /var/www/watchparty/static/;
+        alias /var/www/watchparty/staticfiles/;
         expires 30d;
         add_header Cache-Control "public, immutable";
         add_header Vary Accept-Encoding;
         gzip_static on;
+        try_files $uri $uri/ =404;
     }
 
     # Media files
@@ -1171,30 +1177,20 @@ server {
         alias /var/www/watchparty/media/;
         expires 30d;
         add_header Cache-Control "public, immutable";
+        try_files $uri $uri/ =404;
     }
 
     # WebSocket connections
     location /ws/ {
-        proxy_pass http://127.0.0.1:8001;
+        proxy_pass http://127.0.0.1:8002;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-    }
-
-    # API and application
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header CF-Connecting-IP $http_cf_connecting_ip;
         proxy_connect_timeout 300s;
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
@@ -1202,12 +1198,26 @@ server {
 
     # Health check endpoint (no rate limiting)
     location /health/ {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:8001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header CF-Connecting-IP $http_cf_connecting_ip;
         access_log off;
+    }
+
+    # API and application
+    location / {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header CF-Connecting-IP $http_cf_connecting_ip;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
     }
 
     # Deny access to sensitive files
@@ -1224,6 +1234,7 @@ server {
     }
 }
 NGINX_EOF
+    fi
 
     # Add rate limiting to the configuration if zones are available
     if [[ "$use_rate_limiting" == "true" && -n "$api_zone" && -n "$ws_zone" ]]; then
@@ -1337,12 +1348,34 @@ EOF
     log_success "Fail2Ban configured"
 }
 
+# Function to clean up any existing processes and ensure clean start
+cleanup_existing_processes() {
+    log_info "Cleaning up any existing processes..."
+    
+    # Kill any existing gunicorn processes to avoid port conflicts
+    sudo pkill -f gunicorn || true
+    
+    # Stop services if they exist (ignore errors if they don't exist)
+    sudo systemctl stop watchparty-gunicorn || true
+    sudo systemctl stop watchparty-daphne || true
+    sudo systemctl stop watchparty-celery || true
+    sudo systemctl stop watchparty-celery-beat || true
+    
+    # Reload systemd to pick up any service file changes
+    sudo systemctl daemon-reload
+    
+    log_success "Cleanup completed"
+}
+
 # =============================================================================
 # SERVICE MANAGEMENT
 # =============================================================================
 
 start_services() {
     log_info "Starting services..."
+    
+    # Clean up any existing processes first
+    cleanup_existing_processes
     
     # Start system services
     sudo systemctl start postgresql redis-server nginx

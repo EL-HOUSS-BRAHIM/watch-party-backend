@@ -2,6 +2,29 @@
 
 A comprehensive Django REST API backend for a collaborative video watching platform.
 
+## 🔧 Recent Deployment Fixes (August 2025)
+
+✅ **Deployment issues resolved!** The following critical fixes have been implemented:
+
+- **Virtual Environment**: Fixed corrupted venv recreation during deployment
+- **Service Configuration**: Fixed systemd service files with proper single-line commands
+- **Port Management**: 
+  - Gunicorn (Django app): Port 8001
+  - Daphne (WebSockets): Port 8002
+  - Nginx routing updated accordingly
+- **Cloudflare Integration**: Optimized nginx configuration for Cloudflare proxy
+  - `nginx.conf` - Default Cloudflare-compatible configuration
+  - `nginx-ssl.conf` - Direct SSL version for non-Cloudflare setups
+- **Log Permissions**: Fixed Django log file permission issues
+- **Process Cleanup**: Added automatic cleanup of conflicting processes
+- **Automatic Recovery**: Enhanced error handling and service recovery
+
+**For deployments**: Simply push to master branch - all fixes are now automated! 🎉
+
+### 📋 Configuration Files
+- **[DEPLOYMENT_FIXES_COMPLETE.md](DEPLOYMENT_FIXES_COMPLETE.md)** - Complete deployment fix summary
+- **[NGINX_CONFIG_GUIDE.md](NGINX_CONFIG_GUIDE.md)** - Nginx configuration options guide
+
 ## 🚀 Quick Start
 
 ```bash
@@ -30,20 +53,27 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
 ```
 watch-party-backend/
-├── apps/                 # Django applications
-├── core/                 # Core utilities and base classes
-├── docs/                 # 📚 All documentation
-│   ├── api/             # API documentation
-│   ├── deployment/      # Deployment guides
-│   ├── development/     # Development resources
-│   └── maintenance/     # Maintenance guides
-├── middleware/          # Custom Django middleware
-├── services/            # Business logic services
-├── templates/           # Email and other templates
-├── utils/               # Utility functions
-├── watchparty/          # Main Django project settings
-├── manage.py            # Django management script
-└── requirements.txt     # Python dependencies
+├── apps/                           # Django applications
+├── core/                           # Core utilities and base classes
+├── docs/                           # 📚 All documentation
+│   ├── api/                       # API documentation
+│   ├── deployment/                # Deployment guides
+│   ├── development/               # Development resources
+│   └── maintenance/               # Maintenance guides
+├── middleware/                     # Custom Django middleware
+├── services/                       # Business logic services
+├── templates/                      # Email and other templates
+├── utils/                          # Utility functions
+├── watchparty/                     # Main Django project settings
+├── scripts/                        # 🚀 Deployment and utility scripts
+│   └── production.sh              # Main production deployment script
+├── nginx.conf                      # 🌐 Nginx config (Cloudflare-compatible)
+├── nginx-ssl.conf                  # 🔒 Nginx config (SSL version)
+├── DEPLOYMENT_FIXES_COMPLETE.md    # 📋 Complete deployment fixes summary
+├── NGINX_CONFIG_GUIDE.md           # 📖 Nginx configuration guide
+├── FINAL_DEPLOYMENT_SUMMARY.md     # 🎯 Overall project status
+├── manage.py                       # Django management script
+└── requirements.txt                # Python dependencies
 ```
 
 ## ⚡ Key Features
