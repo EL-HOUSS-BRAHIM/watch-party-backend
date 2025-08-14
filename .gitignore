@@ -31,10 +31,6 @@ MANIFEST
 *.manifest
 *.spec
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -49,111 +45,79 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
+# Django specific
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+/static/
+/staticfiles/
+/media/
 
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-# docs/_build/ (removed - we use different docs structure)
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# PEP 582
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# Environment variables
 .env
-.venv
-env/
+.env.*
+!.env.example
+
+# Virtual environments
 venv/
+env/
 ENV/
-env.bak/
-venv.bak/
+.venv/
+.env/
+test_venv/
 
-# Secrets documentation with real values
-docs/deployment/GITHUB_ACTIONS_SECRETS_SETUP_REAL.md
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# Django specific
-staticfiles/
-mediafiles/
-# Logs
-*.log
-
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# MacOS
 .DS_Store
 Thumbs.db
 
-# Database
-*.sqlite3
-
-# Redis
+# Redis dump
 dump.rdb
 
-# SSL certificates
-*.pem
-*.key
-*.crt
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
 
 # Backup files
 *.bak
-*.tmp
-.ssh/*
+*.backup
+security_config.py
+
+# Development files
+.coverage
+htmlcov/
+.pytest_cache/
+
+# AWS/Deployment
+*.pem
+*.key
+*.crt
+!*.key.example
+
+# SSL certificates
+ssl_certs/
+
+# Old structure (to be removed)
+watchparty/
+middleware/
+services/
+utils/
+core/
+
+# Documentation with secrets
+docs/deployment/GITHUB_ACTIONS_SECRETS_SETUP_REAL.md

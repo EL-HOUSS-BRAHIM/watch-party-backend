@@ -1,54 +1,91 @@
-# Documentation Index
+# Watch Party Backend Documentation Index
 
-## 📋 Complete Documentation Index
+This directory contains all organized documentation for the Watch Party Backend project.
 
-### API Documentation
-- [Complete API Reference](api/backend-api.md) - Comprehensive list of all API endpoints
-- [Backend Endpoints](api/BACKEND-endpoints.md) - Detailed endpoint documentation with examples
-- [Swagger Documentation Guide](api/SWAGGER_DOCUMENTATION_GUIDE.md) - How to use and maintain API documentation
+## 📁 Directory Structure
 
-### Deployment & Infrastructure
-- [Deployment Guide](deployment/DEPLOYMENT.md) - Complete server deployment instructions
-- [GitHub Actions](deployment/GITHUB_ACTIONS_UPDATE.md) - CI/CD pipeline configuration
+### 🔧 **nginx/** - Web Server Configuration
+- [`CLOUDFLARE_SSL_GUIDE.md`](nginx/CLOUDFLARE_SSL_GUIDE.md) - Complete Cloudflare SSL setup guide
+- [`NGINX_CONFIG_GUIDE.md`](nginx/NGINX_CONFIG_GUIDE.md) - Nginx configuration documentation
+- [`nginx-cloudflare-full-strict.conf`](nginx/nginx-cloudflare-full-strict.conf) - Production-ready Cloudflare config
+- [`nginx-ssl.conf`](nginx/nginx-ssl.conf) - Direct SSL configuration
+- [`setup-cloudflare-ssl.sh`](nginx/setup-cloudflare-ssl.sh) - SSL setup automation script
+- [`verify-cloudflare-setup.sh`](nginx/verify-cloudflare-setup.sh) - Configuration verification script
 
-### Development Resources
-- [Database Schema (ERD)](development/ERD.md) - Entity Relationship Diagram and database structure
-- [Third-party Integrations](development/integrations.md) - External service integrations
-- [CORS Configuration](development/CORS_UPDATE_INSTRUCTIONS.md) - CORS setup and security guidelines
+### ☁️ **aws/** - AWS Infrastructure
+- [`AWS_MIGRATION_GUIDE.md`](aws/AWS_MIGRATION_GUIDE.md) - AWS migration procedures
+- [`AWS_SECURITY_GROUP_FIX.md`](aws/AWS_SECURITY_GROUP_FIX.md) - Security group configuration
+- [`aws-infrastructure-summary.md`](aws/aws-infrastructure-summary.md) - Infrastructure overview
 
-### Maintenance & Operations
-- [Cleanup & Maintenance Guide](maintenance/CLEANUP.md) - Project cleanup procedures and automation
+### 🚀 **deployment/** - Deployment & CI/CD
+- [`DEPLOYMENT.md`](deployment/DEPLOYMENT.md) - Main deployment guide
+- [`DEPLOYMENT_CHECKLIST.md`](deployment/DEPLOYMENT_CHECKLIST.md) - Pre-deployment checklist
+- [`DEPLOYMENT_FIXES_COMPLETE.md`](deployment/DEPLOYMENT_FIXES_COMPLETE.md) - Fixed deployment issues
+- [`DEPLOYMENT_FIX_SUMMARY.md`](deployment/DEPLOYMENT_FIX_SUMMARY.md) - Summary of fixes
+- [`DEPLOYMENT_SETUP_COMPLETE.md`](deployment/DEPLOYMENT_SETUP_COMPLETE.md) - Setup completion guide
+- [`DEPLOYMENT_SUCCESS_SUMMARY.md`](deployment/DEPLOYMENT_SUCCESS_SUMMARY.md) - Success metrics
+- [`FINAL_DEPLOYMENT_SUMMARY.md`](deployment/FINAL_DEPLOYMENT_SUMMARY.md) - Final deployment summary
+- [`GITHUB_ACTIONS_UPDATE.md`](deployment/GITHUB_ACTIONS_UPDATE.md) - CI/CD updates
+- [`SECRETS_GUIDE.md`](deployment/SECRETS_GUIDE.md) - Secrets management
 
-## 🔗 Quick Links
+### 🔐 **security/** - Security & Configuration
+- [`ENVIRONMENT_VARIABLES_ALIGNMENT.md`](security/ENVIRONMENT_VARIABLES_ALIGNMENT.md) - Environment variables
+- [`OAUTH_VARIABLES_UPDATE.md`](security/OAUTH_VARIABLES_UPDATE.md) - OAuth configuration
+- [`SSH_PRIVATE_KEY_SETUP.md`](security/SSH_PRIVATE_KEY_SETUP.md) - SSH key setup
 
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| [API Reference](api/backend-api.md) | Complete endpoint listing | Frontend developers, API consumers |
-| [Deployment Guide](deployment/DEPLOYMENT.md) | Server setup and deployment | DevOps, System administrators |
-| [Database ERD](development/ERD.md) | Database design and relationships | Backend developers, Database architects |
-| [Cleanup Guide](maintenance/CLEANUP.md) | Project maintenance procedures | All developers |
+### 🛠️ **development/** - Development Setup
+- Development setup guides
+- Contributing guidelines
+- Code standards
 
-## 📚 Documentation by Role
+### 🔍 **maintenance/** - System Maintenance
+- System monitoring
+- Backup procedures
+- Troubleshooting guides
 
-### Frontend Developers
-- [API Reference](api/backend-api.md)
-- [Backend Endpoints](api/BACKEND-endpoints.md)
-- [Swagger Guide](api/SWAGGER_DOCUMENTATION_GUIDE.md)
+### 📊 **api/** - API Documentation
+- API endpoint documentation
+- Authentication guides
+- Request/Response examples
 
-### Backend Developers
-- [Database ERD](development/ERD.md)
-- [Integrations Guide](development/integrations.md)
-- [CORS Configuration](development/CORS_UPDATE_INSTRUCTIONS.md)
-- [API Reference](api/backend-api.md)
+## 📋 General Documentation
 
-### DevOps Engineers
-- [Deployment Guide](deployment/DEPLOYMENT.md)
-- [GitHub Actions](deployment/GITHUB_ACTIONS_UPDATE.md)
-- [Cleanup Guide](maintenance/CLEANUP.md)
+- [`FIXES_SUMMARY.md`](FIXES_SUMMARY.md) - Summary of all fixes applied
+- [`testing.md`](testing.md) - Testing guidelines and procedures
+- [`README.md`](README.md) - Documentation overview
 
-### Project Maintainers
-- [Cleanup Guide](maintenance/CLEANUP.md)
-- [All Documentation](README.md)
+## 🚀 Quick Start Guides
 
----
-*Generated on August 11, 2025*
+### For Development
+1. [Development Setup](development/SETUP.md)
+2. [API Documentation](api/README.md)
+
+### For Deployment
+1. [Deployment Guide](deployment/DEPLOYMENT.md)
+2. [Nginx Setup](nginx/CLOUDFLARE_SSL_GUIDE.md)
+3. [Security Configuration](security/ENVIRONMENT_VARIABLES_ALIGNMENT.md)
+
+### For Production
+1. [Cloudflare SSL Setup](nginx/CLOUDFLARE_SSL_GUIDE.md)
+2. [AWS Infrastructure](aws/aws-infrastructure-summary.md)
+3. [Deployment Checklist](deployment/DEPLOYMENT_CHECKLIST.md)
+
+## 🔧 Configuration Files
+
+**Active Nginx Config**: [`../nginx.conf`](../nginx.conf) - Currently used configuration
+**Alternative Configs**: Available in [`nginx/`](nginx/) directory
+
+## 📞 Need Help?
+
+1. Check the relevant section above
+2. Use the verification scripts in [`nginx/`](nginx/) for configuration issues
+3. Refer to troubleshooting guides in [`maintenance/`](maintenance/)
+4. Check the main [README.md](../README.md) for project overview
+
+## 📝 File Naming Convention
+
+- `*.md` - Documentation files
+- `*.conf` - Configuration files
+- `*.sh` - Shell scripts (executable)
+- `*_GUIDE.md` - Step-by-step guides
+- `*_SUMMARY.md` - Summary/overview documents

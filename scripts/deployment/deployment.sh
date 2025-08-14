@@ -139,7 +139,7 @@ if [[ ! -d venv ]]; then
 fi
 source venv/bin/activate
 pip install --upgrade pip setuptools wheel
-pip install -r requirements.txt
+pip install -r requirements/production.txt
 pip install gunicorn gevent
 
 # Run migrations & collectstatic if env file exists
@@ -166,7 +166,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=$DEPLOY_DIR
 EnvironmentFile=$DEPLOY_DIR/.env
-ExecStart=$DEPLOY_DIR/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 --worker-class gevent watchparty.wsgi:application
+ExecStart=$DEPLOY_DIR/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 --worker-class gevent config.wsgi:application
 Restart=on-failure
 
 [Install]
@@ -207,7 +207,7 @@ deploy_staging() {
     log_info "Deploying to staging environment..."
     
     # Similar to production but with different settings
-    export DJANGO_SETTINGS_MODULE=watchparty.settings.staging
+    export DJANGO_SETTINGS_MODULE=config.settings.development
     
     deploy_production "staging" "$@"
 }
@@ -395,8 +395,8 @@ Type=exec
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/watch-party-backend
-Environment=DJANGO_SETTINGS_MODULE=watchparty.settings.production
-ExecStart=/var/www/watch-party-backend/venv/bin/gunicorn watchparty.wsgi:application --bind 127.0.0.1:8000
+Environment=DJANGO_SETTINGS_MODULE=config.settings.production
+ExecStart=/var/www/watch-party-backend/venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000
 Restart=always
 
 [Install]
@@ -413,8 +413,8 @@ Type=exec
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/watch-party-backend
-Environment=DJANGO_SETTINGS_MODULE=watchparty.settings.production
-ExecStart=/var/www/watch-party-backend/venv/bin/daphne -b 127.0.0.1 -p 8001 watchparty.asgi:application
+Environment=DJANGO_SETTINGS_MODULE=config.settings.production
+ExecStart=/var/www/watch-party-backend/venv/bin/daphne -b 127.0.0.1 -p 8001 config.asgi:application
 Restart=always
 
 [Install]

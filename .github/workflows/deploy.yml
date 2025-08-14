@@ -29,7 +29,7 @@ env:
   # Core Django settings (from secrets)
   SECRET_KEY: ${{ secrets.SECRET_KEY }}
   DEBUG: ${{ secrets.DEBUG || 'False' }}
-  DJANGO_SETTINGS_MODULE: ${{ secrets.DJANGO_SETTINGS_MODULE || 'watchparty.settings.production' }}
+  DJANGO_SETTINGS_MODULE: ${{ secrets.DJANGO_SETTINGS_MODULE || 'config.settings.production' }}
   ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
   CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
   
@@ -228,7 +228,7 @@ jobs:
         SECRET_KEY: 'test-key-for-ci-running-in-github-actions'
         DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/test_watchparty'
         REDIS_URL: 'redis://localhost:6379/0'
-        DJANGO_SETTINGS_MODULE: 'watchparty.settings.testing'
+        DJANGO_SETTINGS_MODULE: 'config.settings.testing'
       run: |
         echo "🧪 Running Django tests..."
         # Create logs directory
@@ -239,7 +239,7 @@ jobs:
         python -c "
         import os
         import django
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'watchparty.settings.testing')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.testing')
         try:
             django.setup()
             print('✅ Django setup successful')
@@ -264,7 +264,7 @@ jobs:
         from django.test.utils import get_runner
         from django.conf import settings
         
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'watchparty.settings.testing')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.testing')
         django.setup()
         
         # Run basic tests if any exist
