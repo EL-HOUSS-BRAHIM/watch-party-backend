@@ -4,6 +4,8 @@ Provides consistent serialization for all API responses
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 
 
 class StandardResponseSerializer(serializers.Serializer):
@@ -13,7 +15,7 @@ class StandardResponseSerializer(serializers.Serializer):
     status = serializers.CharField()
     message = serializers.CharField()
     timestamp = serializers.DateTimeField()
-    request_id = serializers.CharField()
+    request_id = serializers.CharField(required=False)
     
     
 class SuccessResponseSerializer(StandardResponseSerializer):
@@ -30,6 +32,16 @@ class ErrorResponseSerializer(StandardResponseSerializer):
     errors = serializers.DictField(required=False, allow_null=True)
     error_code = serializers.CharField(required=False, allow_null=True)
 
+
+class ValidationErrorResponseSerializer(ErrorResponseSerializer):
+    """Serializer for validation error responses"""
+    
+    field_errors = serializers.DictField(
+        child=serializers.ListField(child=serializers.CharField()),
+        required=False,
+        help_text="Field-specific validation errors"
+    )
+    
 
 class PaginationMetadataSerializer(serializers.Serializer):
     """Serializer for pagination metadata"""
@@ -49,6 +61,26 @@ class PaginatedResponseMetadataSerializer(serializers.Serializer):
     
     pagination = PaginationMetadataSerializer()
     total_count = serializers.IntegerField(required=False, allow_null=True)
+
+
+class SecurityResponseSerializer(serializers.Serializer):
+    """Serializer for security-related responses"""
+    
+    action_required = serializers.BooleanField(default=False)
+    security_level = serializers.ChoiceField(
+        choices=['low', 'medium', 'high', 'critical'],
+        default='low'
+    )
+    expires_at = serializers.DateTimeField(required=False)
+    
+
+class PerformanceMetricsSerializer(serializers.Serializer):
+    """Serializer for performance metrics"""
+    
+    response_time_ms = serializers.FloatField()
+    query_count = serializers.IntegerField()
+    cache_hits = serializers.IntegerField(default=0)
+    cache_misses = serializers.IntegerField(default=0)
     filters_applied = serializers.DictField(required=False, allow_null=True)
     response_time_ms = serializers.FloatField(required=False, allow_null=True)
     api_version = serializers.CharField(required=False, allow_null=True)
@@ -98,6 +130,105 @@ class DeletedResponseSerializer(SuccessResponseSerializer):
     """Serializer for resource deleted responses"""
     
     metadata = serializers.DictField(required=False, allow_null=True)
+
+
+# Specific response serializers for API views
+class HealthCheckResponseSerializer(serializers.Serializer):
+    """Serializer for health check responses"""
+    status = serializers.CharField()
+    timestamp = serializers.DateTimeField()
+    services = serializers.JSONField()
+    uptime = serializers.CharField(required=False)
+    version = serializers.CharField(required=False)
+
+
+class AnalyticsResponseSerializer(serializers.Serializer):
+    """Serializer for analytics responses"""
+    period = serializers.CharField()
+    metrics = serializers.JSONField()
+    charts = serializers.JSONField(required=False)
+    summary = serializers.JSONField(required=False)
+
+
+class DataResponseSerializer(serializers.Serializer):
+    """Simple data response serializer"""
+    success = serializers.BooleanField(default=True)
+    data = serializers.JSONField()
+
+
+class MessageResponseSerializer(serializers.Serializer):
+    """Simple message response serializer"""
+    success = serializers.BooleanField(default=True)
+    message = serializers.CharField()
+
+
+class APIRootResponseSerializer(serializers.Serializer):
+    """API root response serializer"""
+    message = serializers.CharField()
+    version = serializers.CharField()
+    endpoints = serializers.JSONField()
+    documentation = serializers.URLField(required=False)
+
+
+class DashboardStatsResponseSerializer(serializers.Serializer):
+    """Dashboard statistics response serializer"""
+    stats = serializers.JSONField()
+    period = serializers.CharField(required=False)
+    last_updated = serializers.DateTimeField(required=False)
+
+
+class ActivitiesResponseSerializer(serializers.Serializer):
+    """Recent activities response serializer"""
+    activities = serializers.JSONField()
+    total_count = serializers.IntegerField(required=False)
+    last_updated = serializers.DateTimeField(required=False)
+
+
+class ChatResponseSerializer(serializers.Serializer):
+    """Chat-related response serializer"""
+    success = serializers.BooleanField(default=True)
+    message = serializers.CharField(required=False)
+    data = serializers.JSONField(required=False)
+
+
+class EventResponseSerializer(serializers.Serializer):
+    """Event-related response serializer"""
+    success = serializers.BooleanField(default=True)
+    message = serializers.CharField(required=False)
+    event_data = serializers.JSONField(required=False)
+
+
+class PollResponseSerializer(serializers.Serializer):
+    """Poll response serializer"""
+    success = serializers.BooleanField(default=True)
+    poll_id = serializers.CharField(required=False)
+    message = serializers.CharField(required=False)
+    results = serializers.JSONField(required=False)
+
+
+# Admin panel specific serializers
+class AdminAnalyticsResponseSerializer(serializers.Serializer):
+    """Admin analytics response serializer"""
+    overview = serializers.JSONField()
+    metrics = serializers.JSONField()
+    charts = serializers.JSONField(required=False)
+    period = serializers.CharField(required=False)
+
+
+class AdminActionResponseSerializer(serializers.Serializer):
+    """Admin action response serializer"""
+    success = serializers.BooleanField(default=True)
+    message = serializers.CharField()
+    affected_items = serializers.IntegerField(required=False)
+    details = serializers.JSONField(required=False)
+
+
+class SystemHealthResponseSerializer(serializers.Serializer):
+    """System health response serializer"""
+    status = serializers.CharField()
+    services = serializers.JSONField()
+    metrics = serializers.JSONField(required=False)
+    alerts = serializers.JSONField(required=False)
 
 
 # API Documentation Examples

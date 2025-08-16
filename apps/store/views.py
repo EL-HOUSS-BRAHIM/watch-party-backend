@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db import models
 from drf_spectacular.utils import extend_schema
 
-from core.responses import StandardResponse
+from shared.responses import StandardResponse
 from .models import (
     StoreItem, UserInventory, Achievement, UserAchievement,
     Reward, UserRewardClaim, UserCurrency

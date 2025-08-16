@@ -11,8 +11,8 @@ from django.utils import timezone
 from django.db.models import Count, Q, Avg
 from django.db.models.functions import Extract
 from datetime import timedelta
-from core.permissions import IsAdminUser
-from core.pagination import StandardResultsSetPagination
+from shared.permissions import IsAdminUser
+from shared.pagination import StandardResultsSetPagination
 from .models import ContentReport, ReportAction
 from .serializers import (
     ContentReportSerializer, ContentReportCreateSerializer,
@@ -340,6 +340,9 @@ class ReportActionListView(generics.ListAPIView):
     permission_classes = [IsAdminUser]
     
     def get_queryset(self):
+        # Prevent errors during schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return ReportAction.objects.none()
         report_id = self.kwargs['report_id']
         return ReportAction.objects.filter(
             report_id=report_id
@@ -378,7 +381,7 @@ def _apply_moderation_action(report: ContentReport, action_data: dict):
         elif action_type == 'warning':
             # Send warning notification to user
             if report.reported_user:
-                from services.notification_service import notification_service
+                from shared.services.notification_service import notification_service
                 notification_service.send_warning_notification(
                     user=report.reported_user,
                     reason=action_data['description']

@@ -11,8 +11,8 @@ from django.db.models import Q, Count, Prefetch
 from drf_spectacular.utils import extend_schema
 from datetime import timedelta
 
-from core.responses import StandardResponse
-from core.api_documentation import api_response_documentation
+from shared.responses import StandardResponse
+from shared.api_documentation import api_response_documentation
 
 
 class MobileAppConfigView(APIView):

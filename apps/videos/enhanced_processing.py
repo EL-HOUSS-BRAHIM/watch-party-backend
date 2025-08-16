@@ -12,7 +12,7 @@ from datetime import timedelta
 
 from apps.videos.models import Video, VideoProcessing, VideoStreamingUrl
 from apps.analytics.models import AnalyticsEvent
-from core.error_handling import ErrorTracker
+from shared.error_handling import ErrorTracker
 
 
 class VideoProcessor:

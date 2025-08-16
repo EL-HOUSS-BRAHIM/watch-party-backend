@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 
-from core.responses import StandardResponse
+from shared.responses import StandardResponse
 from .models import SocialGroup, GroupMembership
 
 

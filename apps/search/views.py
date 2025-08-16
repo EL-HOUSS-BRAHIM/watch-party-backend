@@ -14,7 +14,7 @@ from drf_spectacular.utils import extend_schema
 from datetime import timedelta
 import time
 
-from core.responses import StandardResponse
+from shared.responses import StandardResponse
 from .models import SearchQuery as SearchQueryModel, SavedSearch, TrendingQuery, SearchSuggestion, SearchAnalytics
 
 

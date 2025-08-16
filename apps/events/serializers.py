@@ -3,6 +3,7 @@ from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from typing import Any
 from .models import Event, EventAttendee, EventInvitation, EventReminder
 
 User = get_user_model()
@@ -64,9 +65,9 @@ class EventReminderSerializer(serializers.ModelSerializer):
 class EventListSerializer(serializers.ModelSerializer):
     """Serializer for event list view (minimal data)"""
     organizer = EventOrganizerSerializer(read_only=True)
-    attendee_count = serializers.ReadOnlyField()
+    attendee_count = serializers.SerializerMethodField()
     is_attending = serializers.SerializerMethodField()
-    is_full = serializers.ReadOnlyField()
+    is_full = serializers.SerializerMethodField()
     
     class Meta:
         model = Event
@@ -77,10 +78,21 @@ class EventListSerializer(serializers.ModelSerializer):
             'created_at'
         ]
     
-    @extend_schema_field(OpenApiTypes.BOOL)
-
+    @extend_schema_field(serializers.IntegerField)
+    def get_attendee_count(self, obj: Any) -> int:
+        """Get current number of attendees"""
+        return obj.attendees.filter(status='attending').count()
     
-    def get_is_attending(self, obj):
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_full(self, obj: Any) -> bool:
+        """Check if event has reached maximum capacity"""
+        if obj.max_attendees is None:
+            return False
+        return obj.attendees.filter(status='attending').count() >= obj.max_attendees
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_attending(self, obj: Any) -> bool:
+        """Check if current user is attending this event"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return obj.attendees.filter(
@@ -96,13 +108,13 @@ class EventDetailSerializer(serializers.ModelSerializer):
     attendees = EventAttendeeSerializer(many=True, read_only=True)
     invitations = EventInvitationSerializer(many=True, read_only=True)
     reminders = EventReminderSerializer(many=True, read_only=True)
-    attendee_count = serializers.ReadOnlyField()
+    attendee_count = serializers.SerializerMethodField()
     is_attending = serializers.SerializerMethodField()
     user_attendance_status = serializers.SerializerMethodField()
-    is_full = serializers.ReadOnlyField()
-    is_upcoming = serializers.ReadOnlyField()
-    is_ongoing = serializers.ReadOnlyField()
-    is_past = serializers.ReadOnlyField()
+    is_full = serializers.SerializerMethodField()
+    is_upcoming = serializers.SerializerMethodField()
+    is_ongoing = serializers.SerializerMethodField()
+    is_past = serializers.SerializerMethodField()
     
     class Meta:
         model = Event
@@ -114,10 +126,37 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'is_full', 'is_upcoming', 'is_ongoing', 'is_past', 'created_at', 'updated_at'
         ]
     
-    @extend_schema_field(OpenApiTypes.BOOL)
-
+    @extend_schema_field(serializers.IntegerField)
+    def get_attendee_count(self, obj: Any) -> int:
+        """Get current number of attendees"""
+        return obj.attendees.filter(status='attending').count()
     
-    def get_is_attending(self, obj):
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_full(self, obj: Any) -> bool:
+        """Check if event has reached maximum capacity"""
+        if obj.max_attendees is None:
+            return False
+        return obj.attendees.filter(status='attending').count() >= obj.max_attendees
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_upcoming(self, obj: Any) -> bool:
+        """Check if event hasn't started yet"""
+        return obj.start_time > timezone.now()
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_ongoing(self, obj: Any) -> bool:
+        """Check if event is currently happening"""
+        now = timezone.now()
+        return obj.start_time <= now <= obj.end_time
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_past(self, obj: Any) -> bool:
+        """Check if event has ended"""
+        return obj.end_time < timezone.now()
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_attending(self, obj: Any) -> bool:
+        """Check if current user is attending this event"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return obj.attendees.filter(
@@ -126,10 +165,9 @@ class EventDetailSerializer(serializers.ModelSerializer):
             ).exists()
         return False
     
-    @extend_schema_field(OpenApiTypes.STR)
-
-    
-    def get_user_attendance_status(self, obj):
+    @extend_schema_field(serializers.CharField)
+    def get_user_attendance_status(self, obj: Any) -> str:
+        """Get current user's attendance status for this event"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             try:

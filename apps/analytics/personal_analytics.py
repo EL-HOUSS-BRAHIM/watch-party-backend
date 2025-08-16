@@ -9,8 +9,8 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth import get_user_model
 
-from core.responses import StandardResponse
-from core.api_documentation import api_response_documentation
+from shared.responses import StandardResponse
+from shared.api_documentation import api_response_documentation
 
 User = get_user_model()
 

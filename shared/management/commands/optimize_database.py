@@ -5,7 +5,7 @@ Management command to optimize database performance
 from django.core.management.base import BaseCommand
 from django.db import connection
 from django.conf import settings
-from core.database_optimization import CUSTOM_DATABASE_INDEXES
+from .database_optimization import CUSTOM_DATABASE_INDEXES
 import logging
 
 logger = logging.getLogger(__name__)

@@ -11,9 +11,9 @@ from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
 import asyncio
 
-from core.responses import StandardResponse
-from core.api_documentation import api_response_documentation
-from core.monitoring import monitoring_engine, AlertSeverity
+from shared.responses import StandardResponse
+from shared.api_documentation import api_response_documentation
+from shared.monitoring import monitoring_engine, AlertSeverity
 
 
 class MonitoringDashboardView(APIView):
@@ -361,7 +361,7 @@ def test_alert_channels(request):
         return StandardResponse.error("No channels specified")
     
     try:
-        from core.monitoring import Alert, AlertSeverity, AlertChannel
+        from shared.monitoring import Alert, AlertSeverity, AlertChannel
         
         # Create a test alert
         test_alert = Alert(

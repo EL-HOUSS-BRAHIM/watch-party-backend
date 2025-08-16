@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 import psutil
 import sys
 
-from core.responses import StandardResponse
-from core.error_handling import APIHealthMonitor
-from core.base_serializers import HealthCheckResponseSerializer, StandardAPIResponseSerializer
+from shared.responses import StandardResponse
+from shared.error_handling import APIHealthMonitor
+from shared.base_serializers import HealthCheckResponseSerializer, StandardAPIResponseSerializer
 
 
 class HealthCheckView(APIView):

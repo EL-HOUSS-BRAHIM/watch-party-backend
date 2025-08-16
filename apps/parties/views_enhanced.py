@@ -10,7 +10,7 @@ from django.db.models import Count, F
 from django.shortcuts import get_object_or_404
 from datetime import timedelta
 
-from core.responses import StandardResponse
+from shared.responses import StandardResponse
 from .models import WatchParty, PartyEngagementAnalytics, PartyParticipant
 from .serializers import WatchPartySerializer
 

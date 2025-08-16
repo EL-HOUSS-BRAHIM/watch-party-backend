@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from typing import Any
 from apps.videos.serializers import VideoSerializer
 from .models import WatchParty, PartyParticipant, PartyReaction, PartyInvitation, PartyReport
 from apps.chat.models import ChatMessage
@@ -51,8 +52,8 @@ class WatchPartySerializer(serializers.ModelSerializer):
     
     host = serializers.SerializerMethodField()
     video = VideoSerializer(read_only=True)
-    participant_count = serializers.ReadOnlyField()
-    is_full = serializers.ReadOnlyField()
+    participant_count = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
     can_join = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
     
@@ -67,10 +68,21 @@ class WatchPartySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'host', 'room_code', 'created_at', 'updated_at']
     
-    @extend_schema_field(OpenApiTypes.STR)
-
+    @extend_schema_field(serializers.IntegerField)
+    def get_participant_count(self, obj: Any) -> int:
+        """Get current number of participants"""
+        return obj.participants.filter(is_active=True).count()
     
-    def get_host(self, obj):
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_full(self, obj: Any) -> bool:
+        """Check if party has reached maximum participants"""
+        if obj.max_participants is None:
+            return False
+        return obj.participants.filter(is_active=True).count() >= obj.max_participants
+    
+    @extend_schema_field(serializers.DictField)
+    def get_host(self, obj: Any) -> dict:
+        """Get host information"""
         return {
             'id': str(obj.host.id),
             'name': obj.host.full_name,
@@ -78,10 +90,9 @@ class WatchPartySerializer(serializers.ModelSerializer):
             'is_premium': obj.host.is_premium
         }
     
-    @extend_schema_field(OpenApiTypes.STR)
-
-    
-    def get_can_join(self, obj):
+    @extend_schema_field(serializers.BooleanField)
+    def get_can_join(self, obj: Any) -> bool:
+        """Check if current user can join this party"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
@@ -95,7 +106,7 @@ class WatchPartySerializer(serializers.ModelSerializer):
             return False
         
         # Check if party is full
-        if obj.is_full:
+        if self.get_is_full(obj):
             return False
         
         # Check status
@@ -104,10 +115,9 @@ class WatchPartySerializer(serializers.ModelSerializer):
         
         return True
     
-    @extend_schema_field(OpenApiTypes.STR)
-
-    
-    def get_can_edit(self, obj):
+    @extend_schema_field(serializers.BooleanField)
+    def get_can_edit(self, obj: Any) -> bool:
+        """Check if current user can edit this party"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return obj.host == request.user
@@ -263,7 +273,7 @@ class PartyInvitationSerializer(serializers.ModelSerializer):
     party = WatchPartySerializer(read_only=True)
     inviter = serializers.SerializerMethodField()
     invitee = serializers.SerializerMethodField()
-    is_expired = serializers.ReadOnlyField()
+    is_expired = serializers.SerializerMethodField()
     
     class Meta:
         model = PartyInvitation
@@ -273,20 +283,25 @@ class PartyInvitationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'inviter', 'created_at', 'responded_at']
     
-    @extend_schema_field(OpenApiTypes.STR)
-
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_expired(self, obj: Any) -> bool:
+        """Check if invitation has expired"""
+        if not obj.expires_at:
+            return False
+        return obj.expires_at < timezone.now()
     
-    def get_inviter(self, obj):
+    @extend_schema_field(serializers.DictField)
+    def get_inviter(self, obj: Any) -> dict:
+        """Get inviter information"""
         return {
             'id': str(obj.inviter.id),
             'name': obj.inviter.full_name,
             'avatar': obj.inviter.avatar.url if obj.inviter.avatar else None
         }
     
-    @extend_schema_field(OpenApiTypes.STR)
-
-    
-    def get_invitee(self, obj):
+    @extend_schema_field(serializers.DictField)
+    def get_invitee(self, obj: Any) -> dict:
+        """Get invitee information"""
         return {
             'id': str(obj.invitee.id),
             'name': obj.invitee.full_name,

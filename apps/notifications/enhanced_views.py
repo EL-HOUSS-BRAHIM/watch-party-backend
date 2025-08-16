@@ -11,8 +11,8 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from datetime import timedelta, datetime
 
-from core.responses import StandardResponse
-from core.permissions import IsAdminUser
+from shared.responses import StandardResponse
+from shared.permissions import IsAdminUser
 from .models import (
     Notification, NotificationPreference, NotificationTemplate, 
     NotificationBatch, NotificationAnalytics, PushSubscription

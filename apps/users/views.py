@@ -2,13 +2,14 @@
 User views for Watch Party Backend
 """
 
-from rest_framework import status, permissions
+from rest_framework import status, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
+from shared.serializers import DataResponseSerializer, MessageResponseSerializer
 
 from .models import Friendship, UserActivity, UserSettings
 from .serializers import (
@@ -20,11 +21,16 @@ from .serializers import (
 User = get_user_model()
 
 
-class DashboardStatsView(APIView):
+class DashboardStatsView(generics.GenericAPIView):
     """Get dashboard statistics for the user"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = DataResponseSerializer
     
-    @extend_schema(summary="DashboardStatsView GET")
+    @extend_schema(
+        summary="User Dashboard Stats",
+        description="Get dashboard statistics for the authenticated user",
+        responses={200: DataResponseSerializer}
+    )
     def get(self, request):
         user = request.user
         
@@ -49,11 +55,16 @@ class DashboardStatsView(APIView):
         })
 
 
-class UserProfileView(APIView):
-    """Get user profile"""
+class UserProfileView(generics.GenericAPIView):
+    """Get user profile information"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserProfileSerializer
     
-    @extend_schema(summary="UserProfileView GET")
+    @extend_schema(
+        summary="User Profile",
+        description="Get user profile information",
+        responses={200: UserProfileSerializer}
+    )
     def get(self, request):
         serializer = UserProfileSerializer(
             request.user, context={'request': request}
@@ -61,11 +72,16 @@ class UserProfileView(APIView):
         return Response(serializer.data)
 
 
-class UpdateProfileView(APIView):
+class UpdateProfileView(generics.GenericAPIView):
     """Update user profile"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserProfileSerializer
     
-    @extend_schema(summary="UpdateProfileView PUT")
+    @extend_schema(
+        summary="Update Profile",
+        description="Update user profile information",
+        responses={200: UserProfileSerializer}
+    )
     def put(self, request):
         serializer = UserProfileSerializer(
             request.user, data=request.data, partial=True, 
@@ -90,20 +106,30 @@ class UpdateProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class AvatarUploadView(APIView):
+class AvatarUploadView(generics.GenericAPIView):
     """Upload user avatar"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = MessageResponseSerializer
     
-    @extend_schema(summary="AvatarUploadView POST")
+    @extend_schema(
+        summary="Upload Avatar",
+        description="Upload user avatar image",
+        responses={200: MessageResponseSerializer}
+    )
     def post(self, request):
         return Response({'message': 'Avatar upload endpoint'})
 
 
-class FriendsListView(APIView):
-    """List user friends"""
+class FriendsListView(generics.GenericAPIView):
+    """Get user's friends list"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = FriendshipSerializer
     
-    @extend_schema(summary="FriendsListView GET")
+    @extend_schema(
+        summary="Friends List",
+        description="Get user's friends list",
+        responses={200: FriendshipSerializer}
+    )
     def get(self, request):
         # Get all accepted friendships where user is either sender or receiver
         friendships = Friendship.objects.filter(
@@ -157,11 +183,16 @@ class FriendRequestsView(APIView):
         })
 
 
-class SendFriendRequestView(APIView):
-    """Send friend request"""
+class SendFriendRequestView(generics.GenericAPIView):
+    """Send a friend request to another user"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = SendFriendRequestSerializer
     
-    @extend_schema(summary="SendFriendRequestView POST")
+    @extend_schema(
+        summary="Send Friend Request",
+        description="Send a friend request to another user",
+        responses={200: MessageResponseSerializer}
+    )
     def post(self, request):
         serializer = SendFriendRequestSerializer(
             data=request.data, context={'request': request}
@@ -321,11 +352,16 @@ class RemoveFriendView(APIView):
             )
 
 
-class UserSearchView(APIView):
+class UserSearchView(generics.GenericAPIView):
     """Search users"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserSearchSerializer
     
-    @extend_schema(summary="UserSearchView GET")
+    @extend_schema(
+        summary="User Search",
+        description="Search for users by username or email",
+        responses={200: UserSearchSerializer}
+    )
     def get(self, request):
         query = request.query_params.get('q', '').strip()
         

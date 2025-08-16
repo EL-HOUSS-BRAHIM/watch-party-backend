@@ -51,6 +51,10 @@ class EnhancedAutoSchema(AutoSchema):
         """Enhanced operation documentation"""
         operation = super().get_operation(path, path_regex, path_prefix, method, registry)
         
+        # Check if operation is None before modifying it
+        if operation is None:
+            return None
+        
         # Add rate limiting information
         # Use self.view instead of self.target (compatibility fix for drf-spectacular 0.28+)
         view = getattr(self, 'view', None)

@@ -6,6 +6,8 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from typing import Any
 from .models import (
     Notification, NotificationPreferences, NotificationTemplate, 
     NotificationDelivery, NotificationBatch
@@ -44,9 +46,9 @@ class NotificationSerializer(serializers.ModelSerializer):
     related_user = RelatedUserSerializer(read_only=True)
     party_title = serializers.CharField(source='party.title', read_only=True)
     video_title = serializers.CharField(source='video.title', read_only=True)
-    time_since_created = serializers.ReadOnlyField()
-    is_expired = serializers.ReadOnlyField()
-    is_urgent = serializers.ReadOnlyField()
+    time_since_created = serializers.SerializerMethodField()
+    is_expired = serializers.SerializerMethodField()
+    is_urgent = serializers.SerializerMethodField()
     
     class Meta:
         model = Notification
@@ -63,6 +65,35 @@ class NotificationSerializer(serializers.ModelSerializer):
             'id', 'template_type', 'party_title', 'video_title',
             'time_since_created', 'is_expired', 'is_urgent', 'created_at'
         ]
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_expired(self, obj: Any) -> bool:
+        """Check if notification has expired"""
+        if not hasattr(obj, 'expires_at') or obj.expires_at is None:
+            return False
+        return obj.expires_at < timezone.now()
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_urgent(self, obj: Any) -> bool:
+        """Check if notification is urgent based on priority"""
+        return getattr(obj, 'priority', 0) >= 8  # Assuming priority 8+ is urgent
+    
+    @extend_schema_field(serializers.CharField)
+    def get_time_since_created(self, obj: Any) -> str:
+        """Get human-readable time since creation"""
+        now = timezone.now()
+        diff = now - obj.created_at
+        
+        if diff.days > 0:
+            return f"{diff.days} days ago"
+        elif diff.seconds > 3600:
+            hours = diff.seconds // 3600
+            return f"{hours} hours ago"
+        elif diff.seconds > 60:
+            minutes = diff.seconds // 60
+            return f"{minutes} minutes ago"
+        else:
+            return "Just now"
 
 
 class NotificationCreateSerializer(serializers.ModelSerializer):
@@ -132,7 +163,7 @@ class NotificationPreferencesSerializer(serializers.ModelSerializer):
 class NotificationDeliverySerializer(serializers.ModelSerializer):
     """Notification delivery serializer"""
     
-    can_retry = serializers.ReadOnlyField()
+    can_retry = serializers.SerializerMethodField()
     notification_title = serializers.CharField(source='notification.title', read_only=True)
     
     class Meta:
@@ -147,13 +178,18 @@ class NotificationDeliverySerializer(serializers.ModelSerializer):
             'id', 'can_retry', 'notification_title', 'created_at',
             'sent_at', 'delivered_at', 'failed_at'
         ]
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_can_retry(self, obj: Any) -> bool:
+        """Check if delivery can be retried"""
+        return obj.attempts < obj.max_attempts and obj.status == 'failed'
 
 
 class NotificationBatchSerializer(serializers.ModelSerializer):
     """Notification batch serializer"""
     
-    progress_percentage = serializers.ReadOnlyField()
-    success_rate = serializers.ReadOnlyField()
+    progress_percentage = serializers.SerializerMethodField()
+    success_rate = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
     
     class Meta:
@@ -168,6 +204,21 @@ class NotificationBatchSerializer(serializers.ModelSerializer):
             'id', 'progress_percentage', 'success_rate', 'created_by_name',
             'started_at', 'completed_at', 'created_at'
         ]
+    
+    @extend_schema_field(serializers.FloatField)
+    def get_progress_percentage(self, obj: Any) -> float:
+        """Get batch progress percentage"""
+        if obj.total_notifications == 0:
+            return 0.0
+        return (obj.processed_count / obj.total_notifications) * 100.0
+    
+    @extend_schema_field(serializers.FloatField)
+    def get_success_rate(self, obj: Any) -> float:
+        """Get batch success rate percentage"""
+        if obj.processed_count == 0:
+            return 0.0
+        successful_count = obj.processed_count - obj.failed_count
+        return (successful_count / obj.processed_count) * 100.0
 
 
 class NotificationStatsSerializer(serializers.Serializer):
@@ -307,3 +358,27 @@ class NotificationWebhookSerializer(serializers.Serializer):
     provider_data = serializers.DictField(required=False)
     user_agent = serializers.CharField(required=False)
     ip_address = serializers.IPAddressField(required=False)
+
+
+class NotificationPreferencesSerializer(serializers.ModelSerializer):
+    """Serializer for user notification preferences/channels"""
+    
+    user = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = NotificationPreferences
+        fields = [
+            'id', 'user', 'email_enabled', 'push_enabled', 
+            'sms_enabled', 'in_app_enabled', 'created_at', 'updated_at'
+        ]
+    
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_user(self, obj: NotificationPreferences) -> dict:
+        """Get user information"""
+        if not obj.user:
+            return {}
+        return {
+            'id': str(obj.user.id),
+            'username': obj.user.username,
+            'email': obj.user.email
+        }

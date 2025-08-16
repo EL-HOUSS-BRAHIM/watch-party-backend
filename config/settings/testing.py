@@ -9,7 +9,7 @@ import os
 # This helps avoid import errors in CI where not all dependencies are installed
 
 # Use simple URL configuration to avoid import issues
-ROOT_URLCONF = 'watchparty.simple_urls'
+ROOT_URLCONF = 'config.simple_urls'
 
 # Force DEBUG to True for testing
 DEBUG = True

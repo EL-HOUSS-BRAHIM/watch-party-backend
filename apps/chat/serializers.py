@@ -25,7 +25,7 @@ class ChatRoomSerializer(serializers.ModelSerializer):
     """Chat room serializer"""
     
     party_title = serializers.CharField(source='party.title', read_only=True)
-    active_user_count = serializers.ReadOnlyField()
+    active_user_count = serializers.SerializerMethodField()
     
     class Meta:
         model = ChatRoom
@@ -35,6 +35,11 @@ class ChatRoomSerializer(serializers.ModelSerializer):
             'active_user_count', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'party', 'party_title', 'active_user_count', 'created_at', 'updated_at']
+    
+    @extend_schema_field(serializers.IntegerField)
+    def get_active_user_count(self, obj: Any) -> int:
+        """Get count of currently active users in room"""
+        return obj.active_user_count
     
     def validate_max_users(self, value):
         """Validate max users limit"""
@@ -54,8 +59,8 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     
     user = UserBasicSerializer(read_only=True)
     reply_to_message = serializers.SerializerMethodField()
-    reply_count = serializers.ReadOnlyField()
-    is_visible = serializers.ReadOnlyField()
+    reply_count = serializers.SerializerMethodField()
+    is_visible = serializers.SerializerMethodField()
     
     class Meta:
         model = ChatMessage
@@ -69,6 +74,16 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             'id', 'user', 'reply_to_message', 'reply_count', 'is_visible',
             'moderation_status', 'created_at', 'updated_at'
         ]
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_visible(self, obj: Any) -> bool:
+        """Check if message is visible to current user"""
+        return obj.is_visible
+    
+    @extend_schema_field(serializers.IntegerField)
+    def get_reply_count(self, obj: Any) -> int:
+        """Get count of replies to this message"""
+        return obj.reply_count
     
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_reply_to_message(self, obj) -> Optional[Dict[str, Any]]:
@@ -124,7 +139,7 @@ class ChatModerationLogSerializer(serializers.ModelSerializer):
     moderator = UserBasicSerializer(read_only=True)
     target_user = UserBasicSerializer(read_only=True)
     message_preview = serializers.SerializerMethodField()
-    is_active = serializers.ReadOnlyField()
+    is_active = serializers.SerializerMethodField()
     
     class Meta:
         model = ChatModerationLog
@@ -134,6 +149,11 @@ class ChatModerationLogSerializer(serializers.ModelSerializer):
             'created_at', 'expires_at'
         ]
         read_only_fields = ['id', 'moderator', 'message_preview', 'is_active', 'created_at']
+    
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_active(self, obj: Any) -> bool:
+        """Check if moderation action is still active"""
+        return obj.is_active
     
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_message_preview(self, obj) -> Optional[Dict[str, Any]]:
@@ -171,6 +191,7 @@ class ChatBanSerializer(serializers.ModelSerializer):
 class ChatRoomStatsSerializer(serializers.ModelSerializer):
     """Chat room statistics serializer"""
     
+    active_user_count = serializers.SerializerMethodField()
     total_messages = serializers.SerializerMethodField()
     active_messages = serializers.SerializerMethodField()
     total_users = serializers.SerializerMethodField()
@@ -182,6 +203,11 @@ class ChatRoomStatsSerializer(serializers.ModelSerializer):
             'id', 'name', 'active_user_count', 'total_messages',
             'active_messages', 'total_users', 'banned_users_count'
         ]
+    
+    @extend_schema_field(serializers.IntegerField)
+    def get_active_user_count(self, obj: Any) -> int:
+        """Get count of currently active users"""
+        return obj.active_user_count
     
     @extend_schema_field(OpenApiTypes.INT)
     def get_total_messages(self, obj) -> int:

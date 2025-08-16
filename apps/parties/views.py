@@ -23,7 +23,7 @@ from .serializers import (
     VideoControlSerializer, PartyReportSerializer, PartySearchSerializer,
     PartyParticipantSerializer
 )
-from core.permissions import IsHostOrReadOnly
+from shared.permissions import IsHostOrReadOnly
 
 
 class WatchPartyViewSet(ModelViewSet):
@@ -371,12 +371,17 @@ class WatchPartyViewSet(ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
-class JoinByCodeView(APIView):
+class JoinByCodeView(generics.GenericAPIView):
     """Join party by room code"""
     
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PartyJoinSerializer
     
-    @extend_schema(summary="JoinByCodeView POST")
+    @extend_schema(
+        summary="Join Party by Code",
+        description="Join party using room code",
+        responses={200: PartyJoinSerializer}
+    )
     def post(self, request):
         serializer = PartyJoinSerializer(data=request.data)
         if serializer.is_valid():
@@ -397,12 +402,17 @@ class JoinByCodeView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PartySearchView(APIView):
+class PartySearchView(generics.GenericAPIView):
     """Advanced party search"""
     
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PartySearchSerializer
     
-    @extend_schema(summary="PartySearchView GET")
+    @extend_schema(
+        summary="Party Search",
+        description="Search parties with advanced filters",
+        responses={200: PartySearchSerializer}
+    )
     def get(self, request):
         serializer = PartySearchSerializer(data=request.query_params)
         if serializer.is_valid():
@@ -698,10 +708,12 @@ class RecentPartiesView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        # Prevent errors during schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return WatchParty.objects.none()
         user = self.request.user
         # Get parties from the last 30 days where user is host or participant
         thirty_days_ago = timezone.now() - timedelta(days=30)
-        
         return WatchParty.objects.filter(
             Q(host=user) | Q(participants__user=user, participants__is_active=True),
             created_at__gte=thirty_days_ago

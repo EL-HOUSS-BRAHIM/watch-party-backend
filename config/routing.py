@@ -4,7 +4,7 @@ ASGI routing configuration for WebSocket support
 
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
-from utils.websocket_auth import JWTAuthMiddlewareStack
+from shared.websocket_auth import JWTAuthMiddlewareStack
 
 # Import WebSocket routing patterns
 from apps.chat.routing import websocket_urlpatterns as chat_websocket_urlpatterns

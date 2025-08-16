@@ -21,7 +21,7 @@ from apps.analytics.models import (
 from apps.parties.models import WatchParty
 from apps.videos.models import Video
 from apps.billing.models import Subscription, Payment
-from core.permissions import IsAdminUser
+from shared.permissions import IsAdminUser
 
 User = get_user_model()
 

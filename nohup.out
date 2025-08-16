@@ -1,0 +1,55 @@
+WARNING:root:No DATABASE_URL environment variable set, and so no databases setup
+ERROR 2025-08-14 23:53:08,852 log 171901 127217320673408 Internal Server Error: /api/schema/
+Traceback (most recent call last):
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/utils/deprecation.py", line 133, in __call__
+    response = self.process_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/www/watchparty/shared/middleware/database_optimization.py", line 110, in process_request
+    connection.ensure_connection()
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/db/backends/dummy/base.py", line 20, in complain
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: settings.DATABASES is improperly configured. Please supply the ENGINE value. Check settings documentation for more details.
+WARNING 2025-08-14 23:53:08,860 database_optimization 171901 127217320673408 Slow Request: GET /api/schema/ - 0 queries in 5605.89ms (User: None)
+ERROR 2025-08-14 23:53:17,217 log 171902 127217320673408 Internal Server Error: /api/docs/
+Traceback (most recent call last):
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/utils/deprecation.py", line 133, in __call__
+    response = self.process_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/www/watchparty/shared/middleware/database_optimization.py", line 110, in process_request
+    connection.ensure_connection()
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/db/backends/dummy/base.py", line 20, in complain
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: settings.DATABASES is improperly configured. Please supply the ENGINE value. Check settings documentation for more details.
+WARNING 2025-08-14 23:53:17,224 database_optimization 171902 127217320673408 Slow Request: GET /api/docs/ - 0 queries in 3180.49ms (User: None)
+ERROR 2025-08-14 23:59:41,582 log 171902 127217320673408 Internal Server Error: /api/docs/
+Traceback (most recent call last):
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/utils/deprecation.py", line 133, in __call__
+    response = self.process_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/www/watchparty/shared/middleware/database_optimization.py", line 110, in process_request
+    connection.ensure_connection()
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/db/backends/dummy/base.py", line 20, in complain
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: settings.DATABASES is improperly configured. Please supply the ENGINE value. Check settings documentation for more details.
+ERROR 2025-08-15 00:00:13,742 log 171902 127217320673408 Internal Server Error: /api/docs/
+Traceback (most recent call last):
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/utils/deprecation.py", line 133, in __call__
+    response = self.process_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/www/watchparty/shared/middleware/database_optimization.py", line 110, in process_request
+    connection.ensure_connection()
+  File "/var/www/watchparty/venv/lib/python3.12/site-packages/django/db/backends/dummy/base.py", line 20, in complain
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: settings.DATABASES is improperly configured. Please supply the ENGINE value. Check settings documentation for more details.

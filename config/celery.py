@@ -6,7 +6,7 @@ import os
 from celery import Celery
 
 # Set default Django settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'watchparty.settings.development')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
 
 app = Celery('watchparty')
 

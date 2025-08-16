@@ -29,7 +29,7 @@ from .serializers import (
     UserProfileDetailSerializer,
     PasswordChangeSerializer,
     PasswordResetRequestSerializer,
-    PasswordResetSerializer,
+    PasswordResetConfirmSerializer,
     EmailVerificationSerializer,
     TwoFactorSetupRequestSerializer,
     TwoFactorVerifyRequestSerializer,
@@ -42,7 +42,8 @@ from .serializers import (
     GoogleAuthRequestSerializer,
     GitHubAuthRequestSerializer
 )
-from core.mixins import RateLimitMixin
+from shared.mixins import RateLimitMixin
+from shared.serializers import MessageResponseSerializer
 
 
 class RegisterView(RateLimitMixin, APIView):
@@ -113,6 +114,7 @@ class LogoutView(APIView):
     """User logout endpoint"""
     
     permission_classes = [IsAuthenticated]
+    serializer_class = MessageResponseSerializer
     
     @extend_schema(summary="LogoutView POST")
     def post(self, request):
@@ -216,13 +218,13 @@ class ForgotPasswordView(RateLimitMixin, APIView):
 class ResetPasswordView(RateLimitMixin, APIView):
     """Reset password endpoint"""
     
-    serializer_class = PasswordResetSerializer
+    serializer_class = PasswordResetConfirmSerializer
     permission_classes = [AllowAny]
     rate_limit_key = 'auth'
     
     @extend_schema(summary="ResetPasswordView POST")
     def post(self, request):
-        serializer = PasswordResetSerializer(data=request.data)
+        serializer = PasswordResetConfirmSerializer(data=request.data)
         if serializer.is_valid():
             reset = serializer.validated_data['reset']
             new_password = serializer.validated_data['new_password']
@@ -302,6 +304,7 @@ class ResendVerificationView(RateLimitMixin, APIView):
     
     permission_classes = [IsAuthenticated]
     rate_limit_key = 'auth'
+    serializer_class = MessageResponseSerializer
     
     @extend_schema(summary="ResendVerificationView POST")
     def post(self, request):

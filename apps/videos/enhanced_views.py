@@ -10,9 +10,9 @@ from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
-from services.video_service import video_storage_service, video_processing_service, video_streaming_service
+from shared.services.video_service import video_storage_service, video_processing_service, video_streaming_service
 from .models import Video
-from core.exceptions import VideoError
+from shared.exceptions import VideoError
 
 
 class S3VideoUploadView(APIView):

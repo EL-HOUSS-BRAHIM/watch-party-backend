@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.db.models import Q, Count
 from drf_spectacular.utils import extend_schema
 from datetime import timedelta
-from core.permissions import IsAdminUser
+from shared.permissions import IsAdminUser
 from .models import Notification, NotificationPreferences, NotificationTemplate, NotificationDelivery
 from .serializers import (
     NotificationSerializer, NotificationPreferencesSerializer, 
@@ -490,7 +490,7 @@ def update_push_token(request):
     
     # Subscribe to general topic for broadcast notifications
     try:
-        from services.mobile_push_service import mobile_push_service
+        from shared.services.mobile_push_service import mobile_push_service
         mobile_push_service.subscribe_to_topic([token], 'general_announcements')
     except Exception as e:
         logger.warning(f"Failed to subscribe to topic: {str(e)}")
@@ -512,7 +512,7 @@ def remove_push_token(request):
         # Unsubscribe from topics before removing token
         if preferences.push_token:
             try:
-                from services.mobile_push_service import mobile_push_service
+                from shared.services.mobile_push_service import mobile_push_service
                 mobile_push_service.unsubscribe_from_topic(
                     [preferences.push_token], 
                     'general_announcements'
@@ -539,7 +539,7 @@ def remove_push_token(request):
 def test_push_notification(request):
     """Send a test push notification to the user"""
     try:
-        from services.mobile_push_service import mobile_push_service
+        from shared.services.mobile_push_service import mobile_push_service
         
         result = mobile_push_service.send_to_user(
             user=request.user,
@@ -578,7 +578,7 @@ def send_broadcast_push(request):
         )
     
     try:
-        from services.mobile_push_service import mobile_push_service
+        from shared.services.mobile_push_service import mobile_push_service
         
         message_id = mobile_push_service.send_to_topic(
             topic=topic,
@@ -707,30 +707,39 @@ class NotificationTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class NotificationChannelListView(generics.ListAPIView):
     """List notification channels (Admin only)"""
-    serializer_class = serializers.Serializer
+    serializer_class = NotificationPreferencesSerializer
     permission_classes = [IsAdminUser]
+    
+    def get_queryset(self):
+        """Get notification preferences queryset with swagger_fake_view handling."""
+        # Handle swagger_fake_view for schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return NotificationPreferences.objects.none()
+        
+        return NotificationPreferences.objects.select_related('user').all()
     
     @extend_schema(summary="NotificationChannelListView GET")
     def get(self, request):
-        from .models import NotificationChannel
-        channels = NotificationChannel.objects.select_related('user').all()
+        channels = self.get_queryset()
         
         data = []
-        for channel in channels:
-            data.append({
-                'id': str(channel.id),
-                'user': {
-                    'id': str(channel.user.id),
-                    'username': channel.user.username,
-                    'email': channel.user.email
-                },
-                'email_enabled': channel.email_enabled,
-                'push_enabled': channel.push_enabled,
-                'sms_enabled': channel.sms_enabled,
-                'in_app_enabled': channel.in_app_enabled,
-                'created_at': channel.created_at,
-                'updated_at': channel.updated_at
-            })
+        # Only process objects if not in schema generation mode
+        if not getattr(self, 'swagger_fake_view', False):
+            for channel in channels:
+                data.append({
+                    'id': str(channel.id),
+                    'user': {
+                        'id': str(channel.user.id),
+                        'username': channel.user.username,
+                        'email': channel.user.email
+                    },
+                    'email_enabled': channel.email_enabled,
+                    'push_enabled': channel.push_enabled,
+                    'sms_enabled': channel.sms_enabled,
+                    'in_app_enabled': channel.in_app_enabled,
+                    'created_at': channel.created_at,
+                    'updated_at': channel.updated_at
+                })
         
         return Response({
             'channels': data,

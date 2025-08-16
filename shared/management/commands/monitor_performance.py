@@ -4,7 +4,7 @@ Management command to monitor API performance
 
 from django.core.management.base import BaseCommand
 from django.core.cache import cache
-from core.background_tasks import generate_performance_report
+from .background_tasks import generate_performance_report
 
 
 class Command(BaseCommand):

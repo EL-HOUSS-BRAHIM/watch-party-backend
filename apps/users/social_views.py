@@ -7,7 +7,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 
-from services.social_service import social_service
+from shared.services.social_service import social_service
 
 User = get_user_model()
 

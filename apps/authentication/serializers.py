@@ -223,8 +223,8 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         return value
 
 
-class PasswordResetSerializer(serializers.Serializer):
-    """Password reset serializer"""
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Serializer for confirming password reset with token"""
     
     token = serializers.CharField()
     new_password = serializers.CharField(validators=[validate_password])

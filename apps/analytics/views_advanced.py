@@ -11,8 +11,8 @@ from django.db.models import Q, Count, Sum, Avg, F
 from django.utils import timezone
 from datetime import timedelta
 
-from core.responses import StandardResponse
-from core.permissions import IsAdminUser
+from shared.responses import StandardResponse
+from shared.permissions import IsAdminUser
 from apps.analytics.models import SystemAnalytics, AnalyticsEvent, UserAnalytics
 from apps.parties.models import WatchParty, PartyParticipant, PartyEngagementAnalytics
 from apps.videos.models import Video

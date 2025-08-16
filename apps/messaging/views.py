@@ -1,23 +1,24 @@
 """
-Views for Messaging functionality
+Messaging views for Watch Party Backend
+Handles private messaging between users
 """
 
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework import serializers
-from django.db import models
-from django.utils import timezone
+from django.shortcuts import get_object_or_404
+from django.db.models import Q, Count
 from drf_spectacular.utils import extend_schema
-
-from core.responses import StandardResponse
-from .models import Conversation, Message, MessageReaction
-from apps.authentication.models import User
+from shared.responses import StandardResponse
+from .models import Conversation, Message, ConversationParticipant
+from .serializers import ConversationSerializer, MessageSerializer
 
 
 class ConversationsView(APIView):
     """List user's conversations"""
     
-    serializer_class = serializers.Serializer
+    serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated]
     
     @extend_schema(summary="ConversationsView GET")
@@ -142,7 +143,7 @@ class ConversationsView(APIView):
 class MessagesView(APIView):
     """Get and send messages in a conversation"""
     
-    serializer_class = serializers.Serializer
+    serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
     
     @extend_schema(summary="MessagesView GET")

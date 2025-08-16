@@ -34,6 +34,7 @@ DATABASES = {
 # Redis Configuration - Enhanced for Phase 2 features
 REDIS_URL = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
 
+# Redis Cache Configuration (restored - connection working)
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
@@ -50,7 +51,17 @@ CACHES = {
     }
 }
 
-# Session Configuration - Redis backed
+# Previous fallback cache (no longer needed)
+# CACHES = {
+#     'default': {
+#         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+#         'LOCATION': 'watchparty-cache',
+#         'TIMEOUT': 3600,
+#     }
+# }
+# }
+
+# Session Configuration - Redis backed (restored)
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
 
@@ -67,7 +78,7 @@ CELERY_TASK_ROUTES = {
     'watchparty.tasks.*': {'queue': 'maintenance'},
 }
 
-# Channels Configuration - Redis backed for production WebSocket
+# Channels Configuration - Redis backed for production (restored)
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
@@ -78,6 +89,13 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# Previous in-memory fallback (no longer needed)
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels.layers.InMemoryChannelLayer',
+#     },
+# }
 
 # CSRF and CORS Configuration
 CSRF_TRUSTED_ORIGINS = config(

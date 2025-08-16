@@ -34,6 +34,14 @@ class EventListCreateView(generics.ListCreateAPIView):
     pagination_class = EventPagination
     
     def get_queryset(self):
+        # Handle schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return Event.objects.none()
+        
+        # Handle anonymous users
+        if not self.request.user.is_authenticated:
+            return Event.objects.none()
+        
         queryset = Event.objects.select_related('organizer').prefetch_related('attendees')
         
         # Filter by privacy - only show public events and user's own events
@@ -254,7 +262,16 @@ class EventAttendeesView(generics.ListAPIView):
     pagination_class = EventPagination
     
     def get_queryset(self):
-        event = get_object_or_404(Event, pk=self.kwargs['pk'])
+        # Handle schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return EventAttendee.objects.none()
+        
+        # Handle missing pk parameter
+        event_pk = self.kwargs.get('pk')
+        if not event_pk:
+            return EventAttendee.objects.none()
+        
+        event = get_object_or_404(Event, pk=event_pk)
         return event.attendees.select_related('user').order_by('-rsvp_date')
 
 
@@ -267,6 +284,14 @@ class UpcomingEventsView(generics.ListAPIView):
     pagination_class = EventPagination
     
     def get_queryset(self):
+        # Handle schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return Event.objects.none()
+        
+        # Handle anonymous users
+        if not self.request.user.is_authenticated:
+            return Event.objects.none()
+        
         return Event.objects.filter(
             start_time__gt=timezone.now(),
             status='upcoming'
@@ -282,6 +307,14 @@ class MyEventsView(generics.ListAPIView):
     pagination_class = EventPagination
     
     def get_queryset(self):
+        # Handle schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return Event.objects.none()
+        
+        # Handle anonymous users
+        if not self.request.user.is_authenticated:
+            return Event.objects.none()
+        
         return Event.objects.filter(
             organizer=self.request.user
         ).select_related('organizer').prefetch_related('attendees').order_by('-start_time')
@@ -296,6 +329,14 @@ class MyAttendingEventsView(generics.ListAPIView):
     pagination_class = EventPagination
     
     def get_queryset(self):
+        # Handle schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return Event.objects.none()
+        
+        # Handle anonymous users
+        if not self.request.user.is_authenticated:
+            return Event.objects.none()
+        
         attending_event_ids = EventAttendee.objects.filter(
             user=self.request.user,
             status='attending'
@@ -315,6 +356,14 @@ class EventSearchView(generics.ListAPIView):
     pagination_class = EventPagination
     
     def get_queryset(self):
+        # Handle schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return Event.objects.none()
+        
+        # Handle anonymous users
+        if not self.request.user.is_authenticated:
+            return Event.objects.none()
+        
         queryset = Event.objects.select_related('organizer').prefetch_related('attendees')
         
         # Apply search filters using the search serializer
@@ -369,7 +418,16 @@ class EventInvitationListCreateView(generics.ListCreateAPIView):
     serializer_class = EventInvitationSerializer
     
     def get_queryset(self):
-        event = get_object_or_404(Event, pk=self.kwargs['pk'])
+        # Handle schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return EventInvitation.objects.none()
+        
+        # Handle missing pk parameter
+        event_pk = self.kwargs.get('pk')
+        if not event_pk:
+            return EventInvitation.objects.none()
+        
+        event = get_object_or_404(Event, pk=event_pk)
         
         # Only event organizer can view all invitations
         if event.organizer != self.request.user and not self.request.user.is_staff:

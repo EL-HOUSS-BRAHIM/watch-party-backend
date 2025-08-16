@@ -6,13 +6,14 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework import serializers
+from .serializers import IntegrationStatusResponseSerializer, IntegrationManagementResponseSerializer
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 import asyncio
 
-from core.responses import StandardResponse
-from core.api_documentation import api_response_documentation
-from core.integrations import integration_manager, IntegrationType
+from shared.responses import StandardResponse
+from shared.api_documentation import api_response_documentation
+from shared.integrations import integration_manager, IntegrationType
 
 
 @api_view(['GET'])
@@ -33,12 +34,10 @@ class IntegrationStatusView(APIView):
     serializer_class = serializers.Serializer
     permission_classes = [IsAdminUser]
     
-    @api_response_documentation(
-        summary="Get integration status",
-        description="Check the status and health of all registered integrations",
-        tags=['Admin', 'Integrations']
+    @extend_schema(
+        summary="IntegrationStatusView GET",
+        responses={200: IntegrationStatusResponseSerializer}
     )
-    @extend_schema(summary="IntegrationStatusView GET")
     def get(self, request):
         """Get status of all integrations"""
         
@@ -106,12 +105,10 @@ class IntegrationManagementView(APIView):
     serializer_class = serializers.Serializer
     permission_classes = [IsAdminUser]
     
-    @api_response_documentation(
-        summary="Update integration configuration",
-        description="Enable/disable integrations or update their configuration",
-        tags=['Admin', 'Integrations']
+    @extend_schema(
+        summary="IntegrationManagementView POST",
+        responses={200: IntegrationManagementResponseSerializer}
     )
-    @extend_schema(summary="IntegrationManagementView POST")
     def post(self, request):
         """Update integration configuration"""
         integration_name = request.data.get('integration_name')

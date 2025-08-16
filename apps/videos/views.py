@@ -23,7 +23,7 @@ from .serializers import (
     VideoUpdateSerializer, VideoCommentSerializer, VideoUploadSerializer,
     VideoUploadCreateSerializer, VideoSearchSerializer
 )
-from core.permissions import IsOwnerOrReadOnly, IsAdminUser
+from shared.permissions import IsOwnerOrReadOnly, IsAdminUser
 
 
 class VideoViewSet(ModelViewSet):
@@ -237,13 +237,18 @@ class VideoCommentViewSet(ModelViewSet):
         serializer.save(is_edited=True)
 
 
-class VideoUploadView(APIView):
+class VideoUploadView(generics.GenericAPIView):
     """Handle video upload initiation"""
     
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    serializer_class = VideoUploadCreateSerializer
     
-    @extend_schema(summary="VideoUploadView POST")
+    @extend_schema(
+        summary="Video Upload",
+        description="Initiate video upload",
+        responses={200: VideoUploadCreateSerializer}
+    )
     def post(self, request):
         """Initiate video upload"""
         serializer = VideoUploadCreateSerializer(data=request.data)
@@ -322,12 +327,17 @@ class VideoUploadStatusView(generics.RetrieveAPIView):
         return super().get_queryset().filter(user=self.request.user)
 
 
-class VideoSearchView(APIView):
+class VideoSearchView(generics.GenericAPIView):
     """Advanced video search"""
     
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    serializer_class = VideoSearchSerializer
     
-    @extend_schema(summary="VideoSearchView GET")
+    @extend_schema(
+        summary="Video Search",
+        description="Search videos with advanced filters",
+        responses={200: VideoSearchSerializer}
+    )
     def get(self, request):
         """Search videos with advanced filters"""
         serializer = VideoSearchSerializer(data=request.query_params)
@@ -800,7 +810,7 @@ def video_analytics(request, video_id):
         )
     
     try:
-        from services.video_analytics_service import video_analytics_service
+        from shared.services.video_analytics_service import video_analytics_service
         
         days = int(request.query_params.get('days', 30))
         analytics_data = video_analytics_service.get_video_analytics(video, days)
@@ -828,7 +838,7 @@ def video_engagement_heatmap(request, video_id):
         )
     
     try:
-        from services.video_analytics_service import video_analytics_service
+        from shared.services.video_analytics_service import video_analytics_service
         
         heatmap_data = video_analytics_service.get_engagement_heatmap(video)
         
@@ -859,7 +869,7 @@ def video_retention_curve(request, video_id):
         )
     
     try:
-        from services.video_analytics_service import video_analytics_service
+        from shared.services.video_analytics_service import video_analytics_service
         
         retention_data = video_analytics_service.get_retention_curve(video)
         
@@ -889,7 +899,7 @@ def video_viewer_journey(request, video_id):
         )
     
     try:
-        from services.video_analytics_service import video_analytics_service
+        from shared.services.video_analytics_service import video_analytics_service
         
         journey_data = video_analytics_service.get_viewer_journey_analysis(video)
         
@@ -919,7 +929,7 @@ def video_comparative_analytics(request, video_id):
         )
     
     try:
-        from services.video_analytics_service import video_analytics_service
+        from shared.services.video_analytics_service import video_analytics_service
         
         comparative_data = video_analytics_service.get_comparative_analytics(video)
         
@@ -940,7 +950,7 @@ def video_comparative_analytics(request, video_id):
 def trending_videos_analytics(request):
     """Get trending videos analysis (admin only)"""
     try:
-        from services.video_analytics_service import video_analytics_service
+        from shared.services.video_analytics_service import video_analytics_service
         
         days = int(request.query_params.get('days', 7))
         trending_data = video_analytics_service.get_trending_analysis(days)
@@ -964,7 +974,7 @@ def channel_analytics_dashboard(request):
     user = request.user
     
     try:
-        from services.video_analytics_service import video_analytics_service
+        from shared.services.video_analytics_service import video_analytics_service
         from django.db.models import Count, Sum
         
         # Get user's videos

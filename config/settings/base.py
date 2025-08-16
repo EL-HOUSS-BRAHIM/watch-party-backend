@@ -34,8 +34,8 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-    'core',
-    'services',
+    'shared',
+    
     'apps.authentication',
     'apps.users',
     'apps.videos',
@@ -64,47 +64,47 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     
-    # Enhanced security middleware (early in the stack)
-    'middleware.security_middleware.EnhancedSecurityMiddleware',
-    'middleware.security_middleware.AdvancedRateLimitMiddleware',
-    'middleware.security_middleware.FileUploadSecurityMiddleware',
-    'middleware.security_middleware.APIVersioningMiddleware',
-    
-    # Performance and optimization middleware
-    'middleware.performance_middleware.RateLimitMiddleware',
-    'middleware.performance_middleware.ResponseCompressionMiddleware',
-    'middleware.database_optimization.QueryOptimizationMiddleware',
-    'middleware.database_optimization.DatabaseConnectionMiddleware',
-    'middleware.database_optimization.CacheOptimizationMiddleware',
+    # Performance and optimization middleware (before authentication)
+    'shared.middleware.performance_middleware.ResponseCompressionMiddleware',
+    'shared.middleware.database_optimization.QueryOptimizationMiddleware',
+    'shared.middleware.database_optimization.DatabaseConnectionMiddleware',
+    'shared.middleware.database_optimization.CacheOptimizationMiddleware',
     
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',  # Added standard CSRF middleware
-    'middleware.security_middleware.CSRFProtectionMiddleware',  # Enhanced CSRF protection
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     
+    # Enhanced security middleware (after authentication)
+    'shared.middleware.security_middleware.EnhancedSecurityMiddleware',
+    'shared.middleware.security_middleware.AdvancedRateLimitMiddleware',
+    'shared.middleware.security_middleware.FileUploadSecurityMiddleware',
+    'shared.middleware.security_middleware.APIVersioningMiddleware',
+    'shared.middleware.security_middleware.CSRFProtectionMiddleware',  # Enhanced CSRF protection
+    'shared.middleware.performance_middleware.RateLimitMiddleware',
+    
     # Enhanced custom middleware
-    'middleware.enhanced_middleware.RequestLoggingMiddleware',
-    'middleware.enhanced_middleware.SecurityHeadersMiddleware',
-    'middleware.enhanced_middleware.UserActivityMiddleware',
-    'middleware.enhanced_middleware.ErrorHandlingMiddleware',
-    'middleware.enhanced_middleware.MaintenanceMiddleware',
-    'middleware.enhanced_middleware.APIVersionMiddleware',
-    'middleware.enhanced_middleware.ContentTypeMiddleware',
+    'shared.middleware.enhanced_middleware.RequestLoggingMiddleware',
+    'shared.middleware.enhanced_middleware.SecurityHeadersMiddleware',
+    'shared.middleware.enhanced_middleware.UserActivityMiddleware',
+    'shared.middleware.enhanced_middleware.ErrorHandlingMiddleware',
+    'shared.middleware.enhanced_middleware.MaintenanceMiddleware',
+    'shared.middleware.enhanced_middleware.APIVersionMiddleware',
+    'shared.middleware.enhanced_middleware.ContentTypeMiddleware',
     
     # Security audit middleware (later in stack)
-    'middleware.security_middleware.SecurityAuditMiddleware',
+    'shared.middleware.security_middleware.SecurityAuditMiddleware',
     
     # Performance monitoring
-    'middleware.performance_middleware.APIPerformanceMiddleware',
-    'middleware.database_optimization.QueryCountLimitMiddleware',
-    'middleware.database_optimization.DatabaseIndexHintMiddleware',
+    'shared.middleware.performance_middleware.APIPerformanceMiddleware',
+    'shared.middleware.database_optimization.QueryCountLimitMiddleware',
+    'shared.middleware.database_optimization.DatabaseIndexHintMiddleware',
 ]
 
-ROOT_URLCONF = 'watchparty.urls'
+ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
     {
@@ -122,11 +122,11 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'watchparty.wsgi.application'
-ASGI_APPLICATION = 'watchparty.asgi.application'
+WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 
 # Database with optimizations
-from core.database_optimization import get_optimized_database_config, get_cache_config
+from shared.database_optimization import get_optimized_database_config, get_cache_config
 
 # Use optimized database configuration
 DATABASES = get_optimized_database_config()
@@ -203,10 +203,10 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
+    'DEFAULT_PAGINATION_CLASS': 'shared.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_SCHEMA_CLASS': 'core.api_documentation.EnhancedAutoSchema',
-    'EXCEPTION_HANDLER': 'core.error_handling.enhanced_exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'shared.api_documentation.EnhancedAutoSchema',
+    'EXCEPTION_HANDLER': 'shared.error_handling.enhanced_exception_handler',
 }
 
 # Enhanced settings for performance and monitoring
@@ -268,25 +268,25 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULE = {
     'daily-analytics-processing': {
-        'task': 'core.background_tasks.schedule_daily_tasks',
+        'task': 'shared.background_tasks.schedule_daily_tasks',
         'schedule': 3600.0,  # Every hour
     },
     'cleanup-expired-data': {
-        'task': 'core.background_tasks.cleanup_expired_data',
+        'task': 'shared.background_tasks.cleanup_expired_data',
         'schedule': 86400.0,  # Daily
     },
 }
 CELERY_TASK_ROUTES = {
-    'core.background_tasks.process_search_analytics': {'queue': 'analytics'},
-    'core.background_tasks.process_notification_analytics': {'queue': 'analytics'},
-    'core.background_tasks.cleanup_expired_data': {'queue': 'maintenance'},
-    'core.background_tasks.optimize_database_indexes': {'queue': 'maintenance'},
+    'shared.background_tasks.process_search_analytics': {'queue': 'analytics'},
+    'shared.background_tasks.process_notification_analytics': {'queue': 'analytics'},
+    'shared.background_tasks.cleanup_expired_data': {'queue': 'maintenance'},
+    'shared.background_tasks.optimize_database_indexes': {'queue': 'maintenance'},
 }
 
 # Channels Configuration with support for AWS ElastiCache Valkey
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'BACKEND': 'channels_redis.shared.RedisChannelLayer',
         'CONFIG': {
             "hosts": [config('CHANNEL_LAYERS_CONFIG_HOSTS', default=config('REDIS_URL', default='redis://127.0.0.1:6379/1'))],
             # SSL/TLS configuration for AWS ElastiCache
@@ -298,7 +298,7 @@ CHANNEL_LAYERS = {
 }
 
 # Email Configuration
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.shared.mail.backends.console.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
@@ -421,7 +421,17 @@ SPECTACULAR_SETTINGS = {
     'SORT_OPERATIONS': True,
     'DISABLE_ERRORS_AND_WARNINGS': False,
     'ENUM_NAME_OVERRIDES': {
-        'ValidationErrorEnum': 'django.core.exceptions.ValidationError',
+        'ValidationErrorEnum': 'shared.exceptions.ValidationError',
+        # Status field enum overrides
+        'StatusAc5Enum': 'WatchPartyStatusEnum',
+        'Status8e4Enum': 'SubscriptionStatusEnum', 
+        'Status97dEnum': 'BillingInvoiceStatusEnum',
+        'Status9f9Enum': 'EventStatusEnum',
+        # Priority field enum overrides
+        'Priority5f3Enum': 'NotificationPriorityEnum',
+        'PriorityC93Enum': 'SupportTicketPriorityEnum',
+        # Report type enum override
+        'ReportTypeBe8Enum': 'ContentReportTypeEnum',
     },
     'POSTPROCESSING_HOOKS': [
         'drf_spectacular.hooks.postprocess_schema_enums'

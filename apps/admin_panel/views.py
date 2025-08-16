@@ -21,8 +21,8 @@ import csv
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
-from core.permissions import IsAdminUser, IsSuperUser
-from core.responses import StandardResponse
+from shared.permissions import IsAdminUser, IsSuperUser
+from shared.responses import StandardResponse
 from apps.parties.models import WatchParty
 from apps.videos.models import Video
 from apps.analytics.models import SystemAnalytics, AnalyticsEvent
@@ -38,13 +38,149 @@ from .serializers import (
 User = get_user_model()
 
 
+# ========================= CLASS-BASED VIEWS =========================
+
 class AdminDashboardView(generics.GenericAPIView):
     """Main admin dashboard view"""
     permission_classes = [IsAdminUser]
+    serializer_class = AdminDashboardStatsSerializer
     
-    @extend_schema(summary="AdminDashboardView GET")
+    @extend_schema(
+        summary="Admin Dashboard Stats",
+        description="Get admin dashboard statistics",
+        responses={200: AdminDashboardStatsSerializer}
+    )
     def get(self, request):
         return admin_dashboard(request)
+
+
+class AdminUsersListView(generics.GenericAPIView):
+    """Admin users list view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminGenericResponseSerializer
+    
+    @extend_schema(
+        summary="Admin Users List",
+        description="Get paginated list of users for admin",
+        responses={200: AdminGenericResponseSerializer}
+    )
+    def get(self, request):
+        return admin_users_list(request)
+
+
+class AdminSuspendUserView(generics.GenericAPIView):
+    """Admin suspend user view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminUserActionSerializer
+    
+    @extend_schema(
+        summary="Suspend User",
+        description="Suspend a user account",
+        responses={200: AdminUserActionSerializer}
+    )
+    def post(self, request, user_id):
+        return admin_suspend_user(request, user_id)
+
+
+class AdminUnsuspendUserView(generics.GenericAPIView):
+    """Admin unsuspend user view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminUserActionSerializer
+    
+    @extend_schema(
+        summary="Unsuspend User",
+        description="Unsuspend a user account",
+        responses={200: AdminUserActionSerializer}
+    )
+    def post(self, request, user_id):
+        return admin_unsuspend_user(request, user_id)
+
+
+class AdminPartiesListView(generics.GenericAPIView):
+    """Admin parties list view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminGenericResponseSerializer
+    
+    @extend_schema(
+        summary="Admin Parties List",
+        description="Get paginated list of parties for admin",
+        responses={200: AdminGenericResponseSerializer}
+    )
+    def get(self, request):
+        return admin_parties_list(request)
+
+
+class AdminDeletePartyView(generics.GenericAPIView):
+    """Admin delete party view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminGenericResponseSerializer
+    
+    @extend_schema(
+        summary="Delete Party",
+        description="Delete a party",
+        responses={200: AdminGenericResponseSerializer}
+    )
+    def delete(self, request, party_id):
+        return admin_delete_party(request, party_id)
+
+
+class AdminContentReportsView(generics.GenericAPIView):
+    """Admin content reports view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminContentModerationSerializer
+    
+    @extend_schema(
+        summary="Content Reports",
+        description="Get content reports for moderation",
+        responses={200: AdminContentModerationSerializer}
+    )
+    def get(self, request):
+        return admin_content_reports(request)
+
+
+class AdminResolveReportView(generics.GenericAPIView):
+    """Admin resolve report view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminGenericResponseSerializer
+    
+    @extend_schema(
+        summary="Resolve Report",
+        description="Resolve a content report",
+        responses={200: AdminGenericResponseSerializer}
+    )
+    def post(self, request, report_id):
+        return admin_resolve_report(request, report_id)
+
+
+class AdminSystemLogsView(generics.GenericAPIView):
+    """Admin system logs view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminSystemHealthSerializer
+    
+    @extend_schema(
+        summary="System Logs",
+        description="Get system logs and health metrics",
+        responses={200: AdminSystemHealthSerializer}
+    )
+    def get(self, request):
+        return admin_system_logs(request)
+
+
+class AdminBroadcastMessageView(generics.GenericAPIView):
+    """Admin broadcast message view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminBroadcastResponseSerializer
+    
+    @extend_schema(
+        summary="Broadcast Message",
+        description="Send broadcast message to users",
+        responses={200: AdminBroadcastResponseSerializer}
+    )
+    def post(self, request):
+        return admin_broadcast_message(request)
+
+
+# ========================= FUNCTION-BASED VIEWS =========================
 
 
 class AdminPagination(PageNumberPagination):
