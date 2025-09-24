@@ -774,7 +774,7 @@ def video_detailed_analytics(request, video_id):
         video = Video.objects.get(id=video_id)
         
         # Check permissions
-        if not (video.uploaded_by == request.user or request.user.is_staff):
+        if not (video.uploader == request.user or request.user.is_staff):
             return StandardResponse.error("You don't have permission to view these analytics")
         
         # Basic video stats

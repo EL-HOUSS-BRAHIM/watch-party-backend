@@ -656,7 +656,7 @@ def admin_system_logs(request):
                 'email': event.user.email
             } if event.user else None,
             'ip_address': event.ip_address,
-            'data': event.data,
+            'data': event.event_data,
             'message': _format_log_message(event)
         }
         logs_data.append(log_data)
@@ -855,18 +855,18 @@ def _format_log_message(event: 'AnalyticsEvent') -> str:
     user_name = event.user.username if event.user else 'System'
     
     message_templates = {
-        'admin_user_suspended': f"{user_name} suspended user {event.data.get('suspended_user_id', 'unknown')}",
-        'admin_user_unsuspended': f"{user_name} unsuspended user {event.data.get('unsuspended_user_id', 'unknown')}",
-        'admin_video_deleted': f"{user_name} deleted video '{event.data.get('video_title', 'unknown')}'",
-        'admin_party_deleted': f"{user_name} deleted party '{event.data.get('party_title', 'unknown')}'",
-        'admin_report_resolved': f"{user_name} resolved report {event.data.get('report_id', 'unknown')}",
-        'admin_broadcast_sent': f"{user_name} sent broadcast to {event.data.get('recipients_count', 0)} users",
+        'admin_user_suspended': f"{user_name} suspended user {event.event_data.get('suspended_user_id', 'unknown')}",
+        'admin_user_unsuspended': f"{user_name} unsuspended user {event.event_data.get('unsuspended_user_id', 'unknown')}",
+        'admin_video_deleted': f"{user_name} deleted video '{event.event_data.get('video_title', 'unknown')}'",
+        'admin_party_deleted': f"{user_name} deleted party '{event.event_data.get('party_title', 'unknown')}'",
+        'admin_report_resolved': f"{user_name} resolved report {event.event_data.get('report_id', 'unknown')}",
+        'admin_broadcast_sent': f"{user_name} sent broadcast to {event.event_data.get('recipients_count', 0)} users",
         'admin_settings_updated': f"{user_name} updated system settings",
-        'admin_users_exported': f"{user_name} exported {event.data.get('export_count', 0)} user records",
+        'admin_users_exported': f"{user_name} exported {event.event_data.get('export_count', 0)} user records",
         'user_login': f"{user_name} logged in",
         'user_logout': f"{user_name} logged out",
-        'party_create': f"{user_name} created party '{event.data.get('party_title', 'unknown')}'",
-        'video_upload': f"{user_name} uploaded video '{event.data.get('video_title', 'unknown')}'",
+        'party_create': f"{user_name} created party '{event.event_data.get('party_title', 'unknown')}'",
+        'video_upload': f"{user_name} uploaded video '{event.event_data.get('video_title', 'unknown')}'",
     }
     
     return message_templates.get(event.event_type, f"{user_name} performed {event.event_type}")

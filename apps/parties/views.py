@@ -14,6 +14,8 @@ from rest_framework.viewsets import ModelViewSet
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 
+from apps.integrations.services.google_drive import get_drive_service
+
 from .models import WatchParty, PartyParticipant, PartyReaction, PartyInvitation, PartyReport
 from apps.chat.models import ChatMessage
 from .serializers import (
@@ -312,8 +314,6 @@ class WatchPartyViewSet(ModelViewSet):
             return Response({'error': 'Can only select movie for scheduled parties'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            from utils.google_drive_service import get_drive_service
-            
             gdrive_file_id = request.data.get('gdrive_file_id')
             if not gdrive_file_id:
                 return Response({'error': 'Google Drive file ID is required'}, status=status.HTTP_400_BAD_REQUEST)

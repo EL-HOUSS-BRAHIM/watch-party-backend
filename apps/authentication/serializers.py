@@ -15,6 +15,18 @@ from drf_spectacular.types import OpenApiTypes
 from .models import User, UserProfile, EmailVerification, PasswordReset, SocialAccount
 
 
+def create_email_verification_token(user: User) -> str:
+    """Create and persist an email verification token for the given user."""
+
+    token = secrets.token_urlsafe(32)
+    EmailVerification.objects.create(
+        user=user,
+        token=token,
+        expires_at=timezone.now() + timedelta(hours=24),
+    )
+    return token
+
+
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """User registration serializer"""
     
@@ -35,29 +47,30 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
     
     def create(self, validated_data):
+        validated_data = validated_data.copy()
         validated_data.pop('confirm_password')
         promo_code = validated_data.pop('promo_code', None)
-        
+
         user = User.objects.create_user(
             email=validated_data['email'],
             password=validated_data['password'],
             first_name=validated_data['first_name'],
             last_name=validated_data['last_name'],
             is_active=True,
-            is_email_verified=False
+            is_email_verified=False,
         )
-        
+
         # UserProfile is created automatically by signal
-        
+
         # Create email verification token
-        self.create_email_verification_token(user)
-        
+        create_email_verification_token(user)
+
         # Handle promo code if provided
         if promo_code:
             # TODO: Implement promo code handling
             pass
-            
-        return data
+
+        return user
 
 
 # Additional serializers for views that need explicit serializer_class
@@ -103,16 +116,10 @@ class GoogleAuthRequestSerializer(serializers.Serializer):
 class GitHubAuthRequestSerializer(serializers.Serializer):
     """Serializer for GitHub OAuth requests"""
     access_token = serializers.CharField()
-    
+
     def create_email_verification_token(self, user):
         """Create email verification token"""
-        token = secrets.token_urlsafe(32)
-        EmailVerification.objects.create(
-            user=user,
-            token=token,
-            expires_at=timezone.now() + timedelta(hours=24)
-        )
-        return token
+        return create_email_verification_token(user)
 
 
 class UserLoginSerializer(serializers.Serializer):

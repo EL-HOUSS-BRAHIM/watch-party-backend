@@ -17,6 +17,8 @@ from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 
+from apps.integrations.services.google_drive import get_drive_service
+
 from .models import Video, VideoLike, VideoComment, VideoView, VideoUpload
 from .serializers import (
     VideoSerializer, VideoDetailSerializer, VideoCreateSerializer,
@@ -411,8 +413,6 @@ class GoogleDriveMoviesView(APIView):
     def get(self, request):
         """List movies from user's Google Drive"""
         try:
-            from utils.google_drive_service import get_drive_service
-            
             # Check if user has Google Drive connected
             if not hasattr(request.user, 'profile') or not request.user.profile.google_drive_connected:
                 return Response({
@@ -469,8 +469,6 @@ class GoogleDriveMoviesView(APIView):
     def post(self, request):
         """Add a Google Drive movie to our database"""
         try:
-            from utils.google_drive_service import get_drive_service
-            
             gdrive_file_id = request.data.get('gdrive_file_id')
             title = request.data.get('title')
             visibility = request.data.get('visibility', 'private')
@@ -544,7 +542,6 @@ class GoogleDriveMovieUploadView(APIView):
     def post(self, request):
         """Upload a movie to Google Drive"""
         try:
-            from utils.google_drive_service import get_drive_service
             import tempfile
             import os
             
@@ -626,8 +623,6 @@ class GoogleDriveMovieDeleteView(APIView):
     def delete(self, request, video_id):
         """Delete a movie from Google Drive and our database"""
         try:
-            from utils.google_drive_service import get_drive_service
-            
             # Get video
             video = get_object_or_404(Video, id=video_id, uploader=request.user, source_type='gdrive')
             
@@ -667,8 +662,6 @@ class GoogleDriveMovieStreamView(APIView):
     def get(self, request, video_id):
         """Get streaming URL for a Google Drive movie"""
         try:
-            from utils.google_drive_service import get_drive_service
-            
             # Get video
             video = get_object_or_404(Video, id=video_id, source_type='gdrive')
             
@@ -739,7 +732,6 @@ class VideoProxyView(APIView):
         try:
             import requests
             from django.http import StreamingHttpResponse
-            from utils.google_drive_service import get_drive_service
             
             # Get video
             video = get_object_or_404(Video, id=video_id, source_type='gdrive')

@@ -162,6 +162,11 @@ class UserProfile(models.Model):
     google_drive_refresh_token = models.TextField(blank=True, verbose_name='Google Drive Refresh Token')
     google_drive_connected = models.BooleanField(default=False, verbose_name='Google Drive Connected')
     google_drive_folder_id = models.CharField(max_length=255, blank=True, verbose_name='Google Drive Folder ID')
+    google_drive_token_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Google Drive Token Expiry',
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

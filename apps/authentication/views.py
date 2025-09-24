@@ -21,6 +21,8 @@ import io
 import base64
 import requests
 
+from apps.integrations.services.google_drive import GoogleDriveService
+
 from .models import User, EmailVerification, PasswordReset, TwoFactorAuth, UserSession
 from .serializers import (
     UserRegistrationSerializer,
@@ -335,25 +337,44 @@ class ResendVerificationView(RateLimitMixin, APIView):
 
 class GoogleDriveAuthView(APIView):
     """Google Drive OAuth2 authorization endpoint"""
-    
+
     permission_classes = [IsAuthenticated]
     serializer_class = GoogleDriveAuthRequestSerializer
-    
+
+    @staticmethod
+    def _build_client_config() -> dict:
+        client_id = (
+            getattr(settings, 'GOOGLE_DRIVE_CLIENT_ID', '')
+            or getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID', '')
+        )
+        client_secret = (
+            getattr(settings, 'GOOGLE_DRIVE_CLIENT_SECRET', '')
+            or getattr(settings, 'GOOGLE_OAUTH2_CLIENT_SECRET', '')
+        )
+
+        if not client_id or not client_secret:
+            raise ValueError('Google Drive OAuth credentials are not configured.')
+
+        return {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        }
+
+    @staticmethod
+    def _build_redirect_uri(request) -> str:
+        return request.build_absolute_uri('/api/auth/google-drive/callback/')
+
     def get(self, request):
         """Get Google OAuth2 authorization URL"""
         try:
             from google_auth_oauthlib.flow import Flow
-            
-            # OAuth2 configuration
-            client_config = {
-                "web": {
-                    "client_id": getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID', ''),
-                    "client_secret": getattr(settings, 'GOOGLE_OAUTH2_CLIENT_SECRET', ''),
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            }
-            
+
+            client_config = self._build_client_config()
+
             flow = Flow.from_client_config(
                 client_config,
                 scopes=[
@@ -361,66 +382,57 @@ class GoogleDriveAuthView(APIView):
                     'https://www.googleapis.com/auth/drive.file'
                 ]
             )
-            
-            # Set redirect URI (should match your frontend callback)
-            redirect_uri = request.build_absolute_uri('/api/auth/google-drive/callback/')
+
+            redirect_uri = self._build_redirect_uri(request)
             flow.redirect_uri = redirect_uri
-            
-            # Generate authorization URL
+
             authorization_url, state = flow.authorization_url(
                 access_type='offline',
                 include_granted_scopes='true',
                 prompt='consent'
             )
-            
-            # Store state in session for verification
+
             request.session['google_oauth_state'] = state
-            
+
             return Response({
                 'success': True,
                 'authorization_url': authorization_url,
                 'state': state
             }, status=status.HTTP_200_OK)
-            
+        except ValueError as exc:
+            return Response({
+                'success': False,
+                'message': str(exc)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({
                 'success': False,
                 'message': f'Failed to generate authorization URL: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
     def post(self, request):
         """Handle Google OAuth2 callback"""
         try:
             from google_auth_oauthlib.flow import Flow
-            from utils.google_drive_service import GoogleDriveService
-            
+
             code = request.data.get('code')
             state = request.data.get('state')
-            
+
             if not code:
                 return Response({
                     'success': False,
                     'message': 'Authorization code is required'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verify state parameter
+
             stored_state = request.session.get('google_oauth_state')
             if state != stored_state:
                 return Response({
                     'success': False,
                     'message': 'Invalid state parameter'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # OAuth2 configuration
-            client_config = {
-                "web": {
-                    "client_id": getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID', ''),
-                    "client_secret": getattr(settings, 'GOOGLE_OAUTH2_CLIENT_SECRET', ''),
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            }
-            
+
+            client_config = self._build_client_config()
+
             flow = Flow.from_client_config(
                 client_config,
                 scopes=[
@@ -428,47 +440,54 @@ class GoogleDriveAuthView(APIView):
                     'https://www.googleapis.com/auth/drive.file'
                 ]
             )
-            
-            redirect_uri = request.build_absolute_uri('/api/auth/google-drive/callback/')
+
+            redirect_uri = self._build_redirect_uri(request)
             flow.redirect_uri = redirect_uri
-            
-            # Exchange authorization code for tokens
+
             flow.fetch_token(code=code)
-            
+
             credentials = flow.credentials
-            
-            # Initialize Drive service to get or create Watch Party folder
+
             drive_service = GoogleDriveService(
-                access_token=credentials.token,
-                refresh_token=credentials.refresh_token
+                access_token=getattr(credentials, 'token', None),
+                refresh_token=getattr(credentials, 'refresh_token', None),
+                token_expiry=getattr(credentials, 'expiry', None)
             )
-            
+
             folder_id = drive_service.get_or_create_watch_party_folder()
-            
-            # Update user profile with Drive credentials
+
             user = request.user
-            profile, created = user.profile if hasattr(user, 'profile') else (None, True)
-            
-            if not profile:
+            profile = getattr(user, 'profile', None)
+
+            if profile is None:
                 from .models import UserProfile
                 profile = UserProfile.objects.create(user=user)
-            
-            profile.google_drive_token = credentials.token
-            profile.google_drive_refresh_token = credentials.refresh_token
+
+            profile.google_drive_token = getattr(credentials, 'token', '') or ''
+            refresh_token = getattr(credentials, 'refresh_token', None)
+            if refresh_token:
+                profile.google_drive_refresh_token = refresh_token
+            expiry = getattr(credentials, 'expiry', None)
+            if expiry and timezone.is_naive(expiry):
+                expiry = timezone.make_aware(expiry)
+            profile.google_drive_token_expires_at = expiry
             profile.google_drive_connected = True
-            profile.google_drive_folder_id = folder_id
+            profile.google_drive_folder_id = folder_id or ''
             profile.save()
-            
-            # Clean up session
+
             if 'google_oauth_state' in request.session:
                 del request.session['google_oauth_state']
-            
+
             return Response({
                 'success': True,
                 'message': 'Google Drive connected successfully',
                 'folder_id': folder_id
             }, status=status.HTTP_200_OK)
-            
+        except ValueError as exc:
+            return Response({
+                'success': False,
+                'message': str(exc)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({
                 'success': False,
@@ -491,6 +510,7 @@ class GoogleDriveDisconnectView(APIView):
                 profile = user.profile
                 profile.google_drive_token = ''
                 profile.google_drive_refresh_token = ''
+                profile.google_drive_token_expires_at = None
                 profile.google_drive_connected = False
                 profile.google_drive_folder_id = ''
                 profile.save()
