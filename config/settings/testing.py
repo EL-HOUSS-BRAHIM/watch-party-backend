@@ -14,30 +14,19 @@ ROOT_URLCONF = 'config.simple_urls'
 # Force DEBUG to True for testing
 DEBUG = True
 
-# Override database optimization imports to prevent import errors
+# Override database configuration with lightweight SQLite for tests
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'test_watchparty',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
-        'HOST': 'localhost',
-        'PORT': '5432',
-        'TEST': {
-            'NAME': 'test_watchparty_test',
-        },
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'test_db.sqlite3',
     }
 }
 
-# Use Redis for testing to match production environment
+# Use local memory cache to avoid external dependencies during tests
 CACHES = {
     'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://localhost:6379/1',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        },
-        'KEY_PREFIX': 'watchparty_test',
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'watchparty-test',
         'TIMEOUT': 300,
     }
 }
@@ -46,21 +35,16 @@ CACHES = {
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
 
-# Use Redis for channels
+# Use in-memory channel layer for deterministic test behaviour
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [('localhost', 6379)],
-            "capacity": 1500,
-            "expiry": 60,
-        },
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
 
 # Celery configuration for testing
-CELERY_BROKER_URL = 'redis://localhost:6379/2'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/3'
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
@@ -155,9 +139,13 @@ INSTALLED_APPS = [
     'django_filters',
     'channels',
     'drf_spectacular',
-    'core',
+    'shared',
     # Only include apps that don't have complex dependencies
     'apps.authentication',
+    'apps.integrations',
+    'apps.analytics',
+    'apps.parties',
+    'apps.videos',
 ]
 
 # Password hashers for faster tests

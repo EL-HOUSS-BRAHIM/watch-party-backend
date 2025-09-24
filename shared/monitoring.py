@@ -5,10 +5,12 @@ Advanced monitoring and alerting system
 import asyncio
 import logging
 import psutil
+import threading
 import time
-from datetime import timedelta, datetime
-from typing import Dict, List, Any, Optional
+from collections import deque
 from dataclasses import dataclass, asdict
+from datetime import timedelta, datetime
+from typing import Any, Deque, Dict, List, Optional, TYPE_CHECKING
 from enum import Enum
 from django.conf import settings
 from django.core.cache import cache
@@ -17,7 +19,12 @@ from django.core.mail import send_mail
 from django.db import connection
 from django.template.loader import render_to_string
 
+if TYPE_CHECKING:  # pragma: no cover
+    from shared.observability import EventRecord, MetricRecord, SpanRecord
+
 logger = logging.getLogger(__name__)
+
+OBSERVABILITY_CACHE_KEY = "monitoring:observability_snapshot"
 
 
 class AlertSeverity(Enum):
@@ -481,6 +488,10 @@ class MonitoringEngine:
         self.alert_manager = AlertManager()
         self.monitoring_rules = self._load_monitoring_rules()
         self.is_running = False
+        self._observability_lock = threading.RLock()
+        self._observability_metrics: Deque["MetricRecord"] = deque(maxlen=500)
+        self._observability_events: Deque["EventRecord"] = deque(maxlen=500)
+        self._observability_spans: Deque["SpanRecord"] = deque(maxlen=500)
     
     def _load_monitoring_rules(self) -> List[MonitoringRule]:
         """Load monitoring rules configuration"""
@@ -536,7 +547,148 @@ class MonitoringEngine:
                 cooldown_minutes=10
             ),
         ]
-    
+
+    def clear_observability_streams(self) -> None:
+        """Reset cached observability payloads used for dashboards and alerts."""
+
+        with self._observability_lock:
+            self._observability_metrics.clear()
+            self._observability_events.clear()
+            self._observability_spans.clear()
+
+        cache.delete(OBSERVABILITY_CACHE_KEY)
+
+    def ingest_observability_metric(self, metric: "MetricRecord") -> None:
+        """Persist a metric emitted by the observability client."""
+
+        with self._observability_lock:
+            self._observability_metrics.append(metric)
+
+        self._cache_observability_snapshot()
+
+    def ingest_observability_event(self, event: "EventRecord") -> None:
+        """Persist an event emitted by the observability client."""
+
+        with self._observability_lock:
+            self._observability_events.append(event)
+
+        self._maybe_raise_alert_for_event(event)
+        self._cache_observability_snapshot()
+
+    def ingest_observability_span(self, span: "SpanRecord") -> None:
+        """Persist a completed span emitted by the observability client."""
+
+        with self._observability_lock:
+            self._observability_spans.append(span)
+
+        self._cache_observability_snapshot()
+
+    def get_observability_summary(self) -> Dict[str, float]:
+        """Return aggregated metrics derived from forwarded observability payloads."""
+
+        with self._observability_lock:
+            metrics = list(self._observability_metrics)
+            events = list(self._observability_events)
+            spans = list(self._observability_spans)
+
+        return self._build_observability_summary(metrics, events, spans)
+
+    def get_recent_observability_payload(self, limit: int = 50) -> Dict[str, Any]:
+        """Return serialized observability payloads for dashboards."""
+
+        with self._observability_lock:
+            metrics = list(self._observability_metrics)[-limit:]
+            events = list(self._observability_events)[-limit:]
+            spans = list(self._observability_spans)[-limit:]
+
+        summary = self._build_observability_summary(metrics, events, spans)
+        return {
+            'summary': summary,
+            'metrics': [self._serialize_metric(metric) for metric in metrics],
+            'events': [self._serialize_event(event) for event in events],
+            'spans': [self._serialize_span(span) for span in spans],
+        }
+
+    def _build_observability_summary(
+        self,
+        metrics: List["MetricRecord"],
+        events: List["EventRecord"],
+        spans: List["SpanRecord"],
+    ) -> Dict[str, float]:
+        if not metrics and not events and not spans:
+            return {}
+
+        metric_names = {metric.name for metric in metrics}
+        error_events = [event for event in events if event.severity.lower() in {"error", "critical"}]
+        span_errors = [span for span in spans if span.status not in {"ok", "success"}]
+        total_span_duration = sum(span.duration_ms for span in spans)
+
+        span_error_rate = (len(span_errors) / len(spans) * 100) if spans else 0.0
+        avg_span_duration = (total_span_duration / len(spans)) if spans else 0.0
+
+        return {
+            'metrics_total': float(len(metrics)),
+            'metrics_unique': float(len(metric_names)),
+            'events_total': float(len(events)),
+            'event_errors': float(len(error_events)),
+            'spans_total': float(len(spans)),
+            'span_error_rate': float(span_error_rate),
+            'avg_span_duration_ms': float(avg_span_duration),
+        }
+
+    def _serialize_metric(self, metric: "MetricRecord") -> Dict[str, Any]:
+        return {
+            'name': metric.name,
+            'value': float(metric.value),
+            'tags': dict(metric.tags),
+            'timestamp': metric.timestamp.isoformat(),
+        }
+
+    def _serialize_event(self, event: "EventRecord") -> Dict[str, Any]:
+        return {
+            'name': event.name,
+            'message': event.message,
+            'severity': event.severity,
+            'tags': dict(event.tags),
+            'timestamp': event.timestamp.isoformat(),
+        }
+
+    def _serialize_span(self, span: "SpanRecord") -> Dict[str, Any]:
+        return {
+            'name': span.name,
+            'status': span.status,
+            'duration_ms': float(span.duration_ms),
+            'tags': dict(span.tags),
+            'start_time': span.start_time.isoformat(),
+            'end_time': span.end_time.isoformat(),
+            'error': span.error,
+        }
+
+    def _maybe_raise_alert_for_event(self, event: "EventRecord") -> None:
+        severity = event.severity.lower()
+        if severity not in {"error", "critical"}:
+            return
+
+        alert_severity = AlertSeverity.CRITICAL if severity == "critical" else AlertSeverity.HIGH
+        component = event.tags.get('component') or event.tags.get('worker') or 'observability'
+
+        try:
+            self.alert_manager.create_alert(
+                title=f"Observability event: {event.name}",
+                message=event.message,
+                severity=alert_severity,
+                component=component,
+                metric_name=event.name,
+                current_value=1.0,
+                threshold_value=0.0,
+                metadata={**event.tags, 'timestamp': event.timestamp.isoformat()},
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error(f"Failed to register observability alert: {exc}")
+
+    def _cache_observability_snapshot(self) -> None:
+        cache.set(OBSERVABILITY_CACHE_KEY, self.get_recent_observability_payload(limit=25), timeout=300)
+
     async def collect_all_metrics(self) -> Dict[str, Dict[str, float]]:
         """Collect all metrics from different sources"""
         try:
@@ -557,10 +709,14 @@ class MonitoringEngine:
                     **self.app_collector.get_api_metrics(),
                 }
             }
-            
+
+            observability_summary = self.get_observability_summary()
+            if observability_summary:
+                metrics['observability'] = observability_summary
+
             # Store metrics in cache for API access
             cache.set('latest_monitoring_metrics', metrics, timeout=300)
-            
+
             return metrics
         except Exception as e:
             logger.error(f"Failed to collect metrics: {e}")

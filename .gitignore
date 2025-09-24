@@ -50,6 +50,7 @@ coverage.xml
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+test_db.sqlite3
 /static/
 /staticfiles/
 /media/
@@ -118,6 +119,7 @@ middleware/
 services/
 utils/
 core/
+!shared/middleware/
 
 # Documentation with secrets
 docs/deployment/GITHUB_ACTIONS_SECRETS_SETUP_REAL.md

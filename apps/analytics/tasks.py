@@ -13,6 +13,7 @@ import logging
 from .models import AnalyticsEvent, UserSession, WatchTime, PartyAnalytics
 from apps.parties.models import WatchParty
 from apps.videos.models import Video
+from shared.observability import observability
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -24,28 +25,59 @@ def process_analytics_events():
     try:
         # Get unprocessed events from the last hour
         one_hour_ago = timezone.now() - timedelta(hours=1)
-        
+
         events = AnalyticsEvent.objects.filter(
             processed=False,
             timestamp__gte=one_hour_ago
         )
-        
-        processed_count = 0
-        
-        for event in events:
-            try:
-                process_single_event(event)
-                event.processed = True
-                event.save()
-                processed_count += 1
-            except Exception as e:
-                logger.error(f"Error processing event {event.id}: {str(e)}")
-        
+
+        tags = {"worker": "analytics.pipeline", "window": "1h"}
+
+        with observability.span("analytics.pipeline.events", tags=tags):
+            processed_count = 0
+
+            for event in events:
+                try:
+                    process_single_event(event)
+                    event.processed = True
+                    event.save()
+                    processed_count += 1
+                except Exception as exc:
+                    logger.error(f"Error processing event {event.id}: {str(exc)}")
+                    observability.record_event(
+                        "analytics.pipeline.event_error",
+                        f"Failed to process event {event.id}",
+                        severity="error",
+                        tags={**tags, "event_type": event.event_type, "event_id": str(event.id)},
+                    )
+
+            observability.record_metric(
+                "analytics.pipeline.events_processed", processed_count, tags=tags
+            )
+            if processed_count == 0:
+                observability.record_event(
+                    "analytics.pipeline.noop",
+                    "No analytics events were ready for processing",
+                    tags=tags,
+                )
+            else:
+                observability.record_event(
+                    "analytics.pipeline.batch_processed",
+                    f"Processed {processed_count} analytics events",
+                    tags=tags,
+                )
+
         logger.info(f"Processed {processed_count} analytics events")
         return f"Processed {processed_count} events"
-        
+
     except Exception as e:
         logger.error(f"Error in process_analytics_events: {str(e)}")
+        observability.record_event(
+            "analytics.pipeline.error",
+            "Failed to process analytics events batch",
+            severity="error",
+            tags={"worker": "analytics.pipeline"},
+        )
         return f"Error: {str(e)}"
 
 
@@ -207,27 +239,53 @@ def generate_daily_reports():
     """Generate daily analytics reports"""
     try:
         yesterday = timezone.now().date() - timedelta(days=1)
-        
-        # Generate user activity report
-        user_stats = generate_user_activity_report(yesterday)
-        
-        # Generate party statistics report
-        party_stats = generate_party_statistics_report(yesterday)
-        
-        # Generate video engagement report
-        video_stats = generate_video_engagement_report(yesterday)
-        
+        tags = {"worker": "analytics.reports", "date": yesterday.isoformat()}
+
+        with observability.span("analytics.reports.generate", tags=tags):
+            # Generate user activity report
+            user_stats = generate_user_activity_report(yesterday)
+
+            # Generate party statistics report
+            party_stats = generate_party_statistics_report(yesterday)
+
+            # Generate video engagement report
+            video_stats = generate_video_engagement_report(yesterday)
+
+            observability.record_metric(
+                "analytics.reports.active_users", user_stats.get('active_users', 0), tags=tags
+            )
+            observability.record_metric(
+                "analytics.reports.new_users", user_stats.get('new_users', 0), tags=tags
+            )
+            observability.record_metric(
+                "analytics.reports.parties_created", party_stats.get('parties_created', 0), tags=tags
+            )
+            observability.record_metric(
+                "analytics.reports.videos_uploaded", video_stats.get('videos_uploaded', 0), tags=tags
+            )
+            observability.record_event(
+                "analytics.reports.generated",
+                f"Daily analytics reports generated for {yesterday}",
+                tags=tags,
+            )
+
         logger.info(f"Generated daily reports for {yesterday}")
-        
+
         return {
             'date': yesterday.isoformat(),
             'user_stats': user_stats,
             'party_stats': party_stats,
             'video_stats': video_stats
         }
-        
+
     except Exception as e:
         logger.error(f"Error generating daily reports: {str(e)}")
+        observability.record_event(
+            "analytics.reports.error",
+            f"Failed generating reports for {yesterday if 'yesterday' in locals() else 'unknown date'}",
+            severity="error",
+            tags={"worker": "analytics.reports"},
+        )
         return f"Error: {str(e)}"
 
 
@@ -343,23 +401,43 @@ def cleanup_old_analytics():
     try:
         retention_days = 365  # Keep 1 year of data
         cutoff_date = timezone.now() - timedelta(days=retention_days)
-        
-        # Delete old events
-        deleted_events = AnalyticsEvent.objects.filter(
-            timestamp__lt=cutoff_date
-        ).delete()[0]
-        
-        # Delete old sessions
-        deleted_sessions = UserSession.objects.filter(
-            start_time__lt=cutoff_date
-        ).delete()[0]
-        
+        tags = {"worker": "analytics.cleanup", "retention_days": str(retention_days)}
+
+        with observability.span("analytics.cleanup.retention", tags=tags):
+            # Delete old events
+            deleted_events = AnalyticsEvent.objects.filter(
+                timestamp__lt=cutoff_date
+            ).delete()[0]
+
+            # Delete old sessions
+            deleted_sessions = UserSession.objects.filter(
+                start_time__lt=cutoff_date
+            ).delete()[0]
+
+            observability.record_metric(
+                "analytics.cleanup.events_deleted", deleted_events, tags=tags
+            )
+            observability.record_metric(
+                "analytics.cleanup.sessions_deleted", deleted_sessions, tags=tags
+            )
+            observability.record_event(
+                "analytics.cleanup.completed",
+                f"Cleaned up {deleted_events} events and {deleted_sessions} sessions",
+                tags=tags,
+            )
+
         logger.info(f"Cleaned up {deleted_events} events and {deleted_sessions} sessions")
-        
+
         return f"Cleaned up {deleted_events} events and {deleted_sessions} sessions"
-        
+
     except Exception as e:
         logger.error(f"Error in cleanup_old_analytics: {str(e)}")
+        observability.record_event(
+            "analytics.cleanup.error",
+            "Cleanup task failed",
+            severity="error",
+            tags={"worker": "analytics.cleanup"},
+        )
         return f"Error: {str(e)}"
 
 
@@ -369,42 +447,74 @@ def track_user_engagement():
     try:
         now = timezone.now()
         week_ago = now - timedelta(days=7)
-        
-        # Calculate engagement metrics
-        total_users = User.objects.count()
-        active_users_week = User.objects.filter(
-            last_login__gte=week_ago
-        ).count()
-        
-        # Users who joined parties
-        party_participants = User.objects.filter(
-            party_participants__joined_at__gte=week_ago
-        ).distinct().count()
-        
-        # Users who uploaded videos
-        video_uploaders = User.objects.filter(
-            uploaded_videos__created_at__gte=week_ago
-        ).distinct().count()
-        
-        # Users who sent chat messages
-        chat_users = User.objects.filter(
-            chat_messages__created_at__gte=week_ago
-        ).distinct().count()
-        
-        engagement_metrics = {
-            'total_users': total_users,
-            'weekly_active_users': active_users_week,
-            'weekly_party_participants': party_participants,
-            'weekly_video_uploaders': video_uploaders,
-            'weekly_chat_users': chat_users,
-            'engagement_rate': round((active_users_week / total_users) * 100, 2) if total_users > 0 else 0
-        }
-        
+        tags = {"worker": "analytics.engagement"}
+
+        with observability.span("analytics.engagement.track", tags=tags):
+            # Calculate engagement metrics
+            total_users = User.objects.count()
+            active_users_week = User.objects.filter(
+                last_login__gte=week_ago
+            ).count()
+
+            # Users who joined parties
+            party_participants = User.objects.filter(
+                party_participants__joined_at__gte=week_ago
+            ).distinct().count()
+
+            # Users who uploaded videos
+            video_uploaders = User.objects.filter(
+                uploaded_videos__created_at__gte=week_ago
+            ).distinct().count()
+
+            # Users who sent chat messages
+            chat_users = User.objects.filter(
+                chat_messages__created_at__gte=week_ago
+            ).distinct().count()
+
+            engagement_rate = round((active_users_week / total_users) * 100, 2) if total_users > 0 else 0
+
+            observability.record_metric("analytics.engagement.total_users", total_users, tags=tags)
+            observability.record_metric(
+                "analytics.engagement.weekly_active_users", active_users_week, tags=tags
+            )
+            observability.record_metric(
+                "analytics.engagement.weekly_party_participants", party_participants, tags=tags
+            )
+            observability.record_metric(
+                "analytics.engagement.weekly_video_uploaders", video_uploaders, tags=tags
+            )
+            observability.record_metric(
+                "analytics.engagement.weekly_chat_users", chat_users, tags=tags
+            )
+            observability.record_metric(
+                "analytics.engagement.rate", engagement_rate, tags=tags
+            )
+
+            engagement_metrics = {
+                'total_users': total_users,
+                'weekly_active_users': active_users_week,
+                'weekly_party_participants': party_participants,
+                'weekly_video_uploaders': video_uploaders,
+                'weekly_chat_users': chat_users,
+                'engagement_rate': engagement_rate
+            }
+
         logger.info(f"User engagement metrics: {engagement_metrics}")
+        observability.record_event(
+            "analytics.engagement.generated",
+            "Weekly engagement metrics calculated",
+            tags=tags,
+        )
         return engagement_metrics
-        
+
     except Exception as e:
         logger.error(f"Error tracking user engagement: {str(e)}")
+        observability.record_event(
+            "analytics.engagement.error",
+            "Failed to calculate engagement metrics",
+            severity="error",
+            tags={"worker": "analytics.engagement"},
+        )
         return f"Error: {str(e)}"
 
 
@@ -413,44 +523,67 @@ def generate_real_time_stats():
     """Generate real-time statistics for dashboard"""
     try:
         now = timezone.now()
-        
-        # Current active sessions
-        active_sessions = UserSession.objects.filter(
-            start_time__gte=now - timedelta(hours=1),
-            end_time__isnull=True
-        ).count()
-        
-        # Active parties
-        active_parties = WatchParty.objects.filter(
-            is_active=True,
-            actual_start__isnull=False,
-            ended_at__isnull=True
-        ).count()
-        
-        # Recent events (last 5 minutes)
-        recent_events = AnalyticsEvent.objects.filter(
-            timestamp__gte=now - timedelta(minutes=5)
-        ).count()
-        
-        # Popular videos (last 24 hours)
-        popular_videos = WatchTime.objects.filter(
-            updated_at__gte=now - timedelta(hours=24)
-        ).values('video_id').annotate(
-            viewer_count=Count('user_id', distinct=True)
-        ).order_by('-viewer_count')[:5]
-        
-        real_time_stats = {
-            'timestamp': now.isoformat(),
-            'active_sessions': active_sessions,
-            'active_parties': active_parties,
-            'recent_events': recent_events,
-            'popular_videos': list(popular_videos)
-        }
-        
+        tags = {"worker": "analytics.realtime"}
+
+        with observability.span("analytics.realtime.generate", tags=tags):
+            # Current active sessions
+            active_sessions = UserSession.objects.filter(
+                start_time__gte=now - timedelta(hours=1),
+                end_time__isnull=True
+            ).count()
+
+            # Active parties
+            active_parties = WatchParty.objects.filter(
+                is_active=True,
+                actual_start__isnull=False,
+                ended_at__isnull=True
+            ).count()
+
+            # Recent events (last 5 minutes)
+            recent_events = AnalyticsEvent.objects.filter(
+                timestamp__gte=now - timedelta(minutes=5)
+            ).count()
+
+            # Popular videos (last 24 hours)
+            popular_videos = WatchTime.objects.filter(
+                updated_at__gte=now - timedelta(hours=24)
+            ).values('video_id').annotate(
+                viewer_count=Count('user_id', distinct=True)
+            ).order_by('-viewer_count')[:5]
+
+            observability.record_metric(
+                "analytics.realtime.active_sessions", active_sessions, tags=tags
+            )
+            observability.record_metric(
+                "analytics.realtime.active_parties", active_parties, tags=tags
+            )
+            observability.record_metric(
+                "analytics.realtime.recent_events", recent_events, tags=tags
+            )
+
+            real_time_stats = {
+                'timestamp': now.isoformat(),
+                'active_sessions': active_sessions,
+                'active_parties': active_parties,
+                'recent_events': recent_events,
+                'popular_videos': list(popular_videos)
+            }
+
+        observability.record_event(
+            "analytics.realtime.generated",
+            "Real-time analytics snapshot created",
+            tags=tags,
+        )
         return real_time_stats
-        
+
     except Exception as e:
         logger.error(f"Error generating real-time stats: {str(e)}")
+        observability.record_event(
+            "analytics.realtime.error",
+            "Failed to build real-time stats",
+            severity="error",
+            tags={"worker": "analytics.realtime"},
+        )
         return f"Error: {str(e)}"
 
 
@@ -458,33 +591,50 @@ def generate_real_time_stats():
 def calculate_user_metrics():
     """Calculate detailed user metrics"""
     try:
+        tags = {"worker": "analytics.user_metrics"}
         users = User.objects.all()
-        
-        for user in users:
-            # Calculate user's total watch time
-            total_watch_time = WatchTime.objects.filter(
-                user=user
-            ).aggregate(total=Sum('total_watch_time'))['total'] or 0
-            
-            # Calculate parties hosted
-            parties_hosted = WatchParty.objects.filter(host=user).count()
-            
-            # Calculate parties joined
-            parties_joined = user.party_participants.count()
-            
-            # Calculate videos uploaded
-            videos_uploaded = user.uploaded_videos.count()
-            
-            # Update user analytics (you might want to create a UserAnalytics model)
-            # For now, we'll just log the metrics
-            logger.info(f"User {user.id} metrics: "
-                       f"watch_time={total_watch_time}, "
-                       f"parties_hosted={parties_hosted}, "
-                       f"parties_joined={parties_joined}, "
-                       f"videos_uploaded={videos_uploaded}")
-        
+
+        with observability.span("analytics.user_metrics.calculate", tags=tags):
+            for user in users:
+                # Calculate user's total watch time
+                total_watch_time = WatchTime.objects.filter(
+                    user=user
+                ).aggregate(total=Sum('total_watch_time'))['total'] or 0
+
+                # Calculate parties hosted
+                parties_hosted = WatchParty.objects.filter(host=user).count()
+
+                # Calculate parties joined
+                parties_joined = user.party_participants.count()
+
+                # Calculate videos uploaded
+                videos_uploaded = user.uploaded_videos.count()
+
+                logger.info(
+                    f"User {user.id} metrics: "
+                    f"watch_time={total_watch_time}, "
+                    f"parties_hosted={parties_hosted}, "
+                    f"parties_joined={parties_joined}, "
+                    f"videos_uploaded={videos_uploaded}"
+                )
+
+            observability.record_metric(
+                "analytics.user_metrics.users_processed", users.count(), tags=tags
+            )
+            observability.record_event(
+                "analytics.user_metrics.completed",
+                f"Calculated metrics for {users.count()} users",
+                tags=tags,
+            )
+
         return f"Calculated metrics for {users.count()} users"
-        
+
     except Exception as e:
         logger.error(f"Error calculating user metrics: {str(e)}")
+        observability.record_event(
+            "analytics.user_metrics.error",
+            "Failed to calculate user metrics",
+            severity="error",
+            tags={"worker": "analytics.user_metrics"},
+        )
         return f"Error: {str(e)}"

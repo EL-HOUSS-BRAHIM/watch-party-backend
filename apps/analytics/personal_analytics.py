@@ -68,7 +68,7 @@ class PersonalAnalyticsView(APIView):
         )
         
         uploaded_videos = Video.objects.filter(
-            uploaded_by=user,
+            uploader=user,
             created_at__range=[start_date, end_date]
         )
         
@@ -294,7 +294,7 @@ class PersonalAnalyticsView(APIView):
         from apps.store.models import UserAchievement
         
         total_parties = WatchParty.objects.filter(host=user).count()
-        total_videos = Video.objects.filter(uploaded_by=user).count()
+        total_videos = Video.objects.filter(uploader=user).count()
         total_achievements = UserAchievement.objects.filter(user=user).count()
         
         milestones = []

@@ -283,7 +283,7 @@ class VideoStatsView(generics.RetrieveAPIView):
         
         # Check if user owns the video or if video is public
         user = self.request.user
-        if video.uploaded_by != user and video.visibility != 'public':
+        if video.uploader != user and video.visibility != 'public':
             raise permissions.PermissionDenied("You don't have access to this video's analytics")
         
         analytics, created = VideoAnalytics.objects.get_or_create(video=video)
@@ -349,7 +349,7 @@ class AdminAnalyticsView(generics.GenericAPIView):
                     'id': video.id,
                     'title': video.title,
                     'view_count': video.view_count,
-                    'uploaded_by': video.uploaded_by.full_name
+                    'uploaded_by': video.uploader.full_name
                 }
                 for video in trending_videos
             ],
@@ -383,7 +383,7 @@ class AdminAnalyticsView(generics.GenericAPIView):
             'premium_users': User.objects.filter(is_premium=True).count(),
             'total_videos': Video.objects.count(),
             'videos_uploaded_today': Video.objects.filter(
-                uploaded_at__range=[day_start, day_end]
+                created_at__range=[day_start, day_end]
             ).count(),
             'total_parties': WatchParty.objects.count(),
             'parties_created_today': WatchParty.objects.filter(
@@ -445,9 +445,9 @@ class ExportAnalyticsView(generics.GenericAPIView):
             
         elif export_type == 'video':
             video = get_object_or_404(Video, id=entity_id)
-            
+
             # Check permission
-            if video.uploaded_by != request.user and not request.user.is_staff:
+            if video.uploader != request.user and not request.user.is_staff:
                 return Response(
                     {'error': 'Permission denied'},
                     status=status.HTTP_403_FORBIDDEN

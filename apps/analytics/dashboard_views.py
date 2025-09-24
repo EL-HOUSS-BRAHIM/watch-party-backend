@@ -20,7 +20,11 @@ from apps.analytics.models import (
 )
 from apps.parties.models import WatchParty
 from apps.videos.models import Video
-from apps.billing.models import Subscription, Payment
+try:  # Billing is optional in the lightweight test settings
+    from apps.billing.models import Subscription, Payment
+except Exception:  # pragma: no cover - gracefully handle missing billing app
+    Subscription = None
+    Payment = None
 from shared.permissions import IsAdminUser
 
 User = get_user_model()
@@ -45,22 +49,32 @@ def dashboard_stats(request):
         created_at__gte=start_date
     ).count()
     
-    recent_watch_time = WatchTime.objects.filter(
-        user=user,
-        created_at__gte=start_date
-    ).aggregate(total=Sum('duration'))['total'] or 0
+    recent_watch_time = (
+        WatchTime.objects.filter(
+            user=user,
+            created_at__gte=start_date
+        ).aggregate(total=Sum('total_watch_time'))['total']
+        or 0
+    )
     
-    # Friend activity
-    friend_parties = WatchParty.objects.filter(
-        participants__in=user.friends.all(),
-        created_at__gte=start_date
-    ).count()
+    # Friend activity (optional when the friendships app is disabled)
+    friend_parties = 0
+    try:
+        friends_qs = user.friends
+    except Exception:  # pragma: no cover - friendships app may be absent in tests
+        friends_qs = None
+
+    if friends_qs is not None:
+        friend_parties = WatchParty.objects.filter(
+            participants__in=friends_qs,
+            created_at__gte=start_date
+        ).count()
     
     stats = {
         'user_stats': {
-            'total_parties_hosted': user_analytics.parties_hosted,
-            'total_parties_joined': user_analytics.parties_joined,
-            'total_watch_time': user_analytics.total_watch_time,
+            'total_parties_hosted': user_analytics.total_parties_hosted,
+            'total_parties_joined': user_analytics.total_parties_joined,
+            'total_watch_time': user_analytics.total_watch_time_minutes,
             'total_videos_uploaded': user_analytics.videos_uploaded,
             'recent_parties_hosted': recent_parties,
             'recent_watch_time': recent_watch_time,
@@ -103,7 +117,7 @@ def user_analytics(request):
     ).annotate(
         period=trunc_func('created_at')
     ).values('period').annotate(
-        total_duration=Sum('duration'),
+        total_duration=Sum('total_watch_time'),
         session_count=Count('id')
     ).order_by('period')
     
@@ -134,7 +148,7 @@ def user_analytics(request):
         'summary': {
             'total_watch_time': WatchTime.objects.filter(
                 user=user, created_at__gte=start_date
-            ).aggregate(Sum('duration'))['duration__sum'] or 0,
+            ).aggregate(Sum('total_watch_time'))['total_watch_time__sum'] or 0,
             'total_parties': WatchParty.objects.filter(
                 Q(host=user) | Q(participants=user),
                 created_at__gte=start_date
@@ -155,7 +169,7 @@ def video_analytics(request, video_id):
     video = get_object_or_404(Video, id=video_id)
     
     # Check if user has permission to view analytics
-    if video.uploaded_by != request.user and not request.user.is_staff:
+    if video.uploader != request.user and not request.user.is_staff:
         return Response(
             {'error': 'Permission denied'}, 
             status=status.HTTP_403_FORBIDDEN
@@ -173,7 +187,7 @@ def video_analytics(request, video_id):
         date=TruncDate('created_at')
     ).values('date').annotate(
         views=Count('user', distinct=True),
-        watch_time=Sum('duration')
+        watch_time=Sum('total_watch_time')
     ).order_by('date')
     
     # Geographic data (if available)
@@ -232,7 +246,7 @@ def party_analytics(request, party_id):
     participant_stats = WatchTime.objects.filter(
         party=party
     ).values('user').annotate(
-        total_watch_time=Sum('duration'),
+        total_watch_time=Sum('total_watch_time'),
         session_count=Count('id')
     ).order_by('-total_watch_time')
     
@@ -300,7 +314,7 @@ def system_analytics(request):
     # Engagement metrics
     total_watch_time = WatchTime.objects.filter(
         created_at__gte=start_date
-    ).aggregate(Sum('duration'))['duration__sum'] or 0
+    ).aggregate(Sum('total_watch_time'))['total_watch_time__sum'] or 0
     
     avg_session_duration = UserSession.objects.filter(
         start_time__gte=start_date,
@@ -309,12 +323,12 @@ def system_analytics(request):
     
     # Revenue metrics (if billing is enabled)
     revenue_data = {}
-    if hasattr(request.user, 'subscription'):
+    if Payment is not None and Subscription is not None and hasattr(request.user, 'subscription'):
         total_revenue = Payment.objects.filter(
             created_at__gte=start_date,
             status='completed'
         ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
-        
+
         active_subscriptions = Subscription.objects.filter(
             status='active'
         ).count()
@@ -340,9 +354,9 @@ def system_analytics(request):
     
     # Popular content
     popular_videos = Video.objects.annotate(
-        view_count=Count('watchtime')
+        view_count=Count('watch_times')
     ).order_by('-view_count')[:10].values(
-        'id', 'title', 'view_count', 'uploaded_by__username'
+        'id', 'title', 'view_count', 'uploader__username'
     )
     
     data = {
@@ -393,8 +407,8 @@ def track_event(request):
     event = AnalyticsEvent.objects.create(
         user=request.user,
         event_type=event_type,
-        data=request.data.get('data', {}),
-        session_id=request.data.get('session_id'),
+        event_data=request.data.get('data', {}),
+        session_id=request.data.get('session_id', ''),
         user_agent=request.META.get('HTTP_USER_AGENT', ''),
         ip_address=request.META.get('REMOTE_ADDR', ''),
         party_id=request.data.get('party_id'),
@@ -415,7 +429,7 @@ def _get_recent_activity(user: User, start_date) -> List[Dict[str, Any]]:
         {
             'event_type': event.event_type,
             'timestamp': event.timestamp,
-            'data': event.data
+            'data': event.event_data
         }
         for event in events
     ]
@@ -436,7 +450,7 @@ def _get_watch_time_by_day(user: User, start_date) -> List[Dict[str, Any]]:
     ).annotate(
         date=TruncDate('created_at')
     ).values('date').annotate(
-        total_duration=Sum('duration')
+        total_duration=Sum('total_watch_time')
     ).order_by('date')
     
     return [

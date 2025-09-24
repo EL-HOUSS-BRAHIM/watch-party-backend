@@ -142,7 +142,7 @@ class PartyAnalytics(models.Model):
 
 class AnalyticsEvent(models.Model):
     """Individual analytics events"""
-    
+
     EVENT_TYPES = [
         ('video_play', 'Video Play'),
         ('video_pause', 'Video Pause'),
@@ -158,25 +158,46 @@ class AnalyticsEvent(models.Model):
         ('buffering', 'Video Buffering'),
         ('error', 'Error Occurred'),
     ]
-    
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='analytics_events', null=True, blank=True)
-    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='analytics_events',
+        null=True,
+        blank=True,
+    )
+    party = models.ForeignKey(
+        WatchParty,
+        on_delete=models.CASCADE,
+        related_name='analytics_events',
+        null=True,
+        blank=True,
+    )
+    video = models.ForeignKey(
+        Video,
+        on_delete=models.CASCADE,
+        related_name='analytics_events',
+        null=True,
+        blank=True,
+    )
+
     # Event details
     event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
     event_data = models.JSONField(default=dict, verbose_name='Event Data')
-    
+    duration = models.DurationField(null=True, blank=True, verbose_name='Event Duration')
+
     # Session information
     session_id = models.CharField(max_length=100, blank=True, verbose_name='Session ID')
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True, verbose_name='User Agent')
-    
+
     # Processing status
     processed = models.BooleanField(default=False, verbose_name='Processed')
-    
+
     # Timestamp
     timestamp = models.DateTimeField(default=timezone.now, verbose_name='Event Timestamp')
-    
+
     class Meta:
         db_table = 'analytics_events'
         verbose_name = 'Analytics Event'
@@ -184,11 +205,13 @@ class AnalyticsEvent(models.Model):
         ordering = ['-timestamp']
         indexes = [
             models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['party', 'timestamp']),
+            models.Index(fields=['video', 'timestamp']),
             models.Index(fields=['event_type', 'timestamp']),
             models.Index(fields=['processed', 'timestamp']),
             models.Index(fields=['session_id']),
         ]
-        
+
     def __str__(self):
         user_str = self.user.get_full_name() if self.user else 'Anonymous'
         return f"{user_str} - {self.event_type} at {self.timestamp}"
