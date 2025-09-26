@@ -26,8 +26,24 @@ NGINX_CONFIG_NAME="watchparty-backend"
 SSL_CERT_PATH="/etc/ssl/certs"
 SSL_KEY_PATH="/etc/ssl/private"
 
+# Production EC2 Instance Configuration
+PRODUCTION_HOST="35.181.208.71"
+PRODUCTION_USER="ubuntu"
+PRODUCTION_KEY_PATH="/workspaces/watch-party-backend/.ssh/id_rsa"
+
+# Database Configuration (from your provided info)
+DB_HOST="all-in-one.cj6w0queklir.eu-west-3.rds.amazonaws.com"
+DB_PORT="5432"
+DB_NAME="watchparty_prod"
+DB_USER="postgres"
+
+# Redis Configuration (from your provided info)
+REDIS_PRIMARY_HOST="master.watch-party-valkey.2muo9f.euw3.cache.amazonaws.com"
+REDIS_REPLICA_HOST="replica.watch-party-valkey.2muo9f.euw3.cache.amazonaws.com"
+REDIS_PORT="6379"
+
 # Non-interactive behavior: set AUTO_CONFIRM=1 to auto-answer prompts with sensible defaults.
-# Set RUN_ACTION to a number 0-6 to run a specific menu action non-interactively and exit.
+# Set RUN_ACTION to a number 0-8 to run a specific menu action non-interactively and exit.
 AUTO_CONFIRM=${AUTO_CONFIRM:-0}
 RUN_ACTION=${RUN_ACTION:-}
 
@@ -570,6 +586,7 @@ show_menu() {
     echo
     echo "Backend Domain: $BACKEND_DOMAIN"
     echo "Frontend Domain: $FRONTEND_DOMAIN"
+    echo "Production Host: $PRODUCTION_HOST"
     echo
     echo "1. Initialize PM2 (Django + Celery + WebSocket)"
     echo "2. Install Nginx HTTP for Backend (development/testing)"
@@ -577,13 +594,229 @@ show_menu() {
     echo "4. Test Nginx configuration"
     echo "5. Stop all services"
     echo "6. Show service status"
+    echo "7. Deploy to Production EC2 (Remote)"
+    echo "8. Test Production Connections"
+    echo "9. Setup HTTPS/SSL for existing deployment"
     echo "0. Exit"
     echo
 }
 
+# Function to test database and Redis connections
+test_production_connections() {
+    print_header "Testing Production Infrastructure Connections"
+    
+    # Test PostgreSQL connection
+    print_status "Testing PostgreSQL connection to $DB_HOST:$DB_PORT..."
+    if command -v pg_isready &> /dev/null; then
+        if pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME; then
+            print_status "✅ PostgreSQL connection successful"
+        else
+            print_error "❌ PostgreSQL connection failed"
+        fi
+    else
+        print_warning "pg_isready not available. Install postgresql-client to test connections."
+    fi
+    
+    # Test Redis connection
+    print_status "Testing Redis connection to $REDIS_PRIMARY_HOST:$REDIS_PORT..."
+    if command -v redis-cli &> /dev/null; then
+        if redis-cli -h $REDIS_PRIMARY_HOST -p $REDIS_PORT ping | grep -q PONG; then
+            print_status "✅ Redis primary connection successful"
+        else
+            print_error "❌ Redis primary connection failed"
+        fi
+        
+        # Test Redis replica
+        print_status "Testing Redis replica connection to $REDIS_REPLICA_HOST:$REDIS_PORT..."
+        if redis-cli -h $REDIS_REPLICA_HOST -p $REDIS_PORT ping | grep -q PONG; then
+            print_status "✅ Redis replica connection successful"
+        else
+            print_warning "⚠️  Redis replica connection failed or not accessible"
+        fi
+    else
+        print_warning "redis-cli not available. Install redis-tools to test connections."
+    fi
+    
+    print_status "Connection tests completed"
+}
+
+# Function to setup HTTPS on existing deployment
+setup_production_https() {
+    print_header "Setting up HTTPS for Production Deployment"
+    
+    print_status "This will configure HTTPS/SSL for your existing EC2 deployment"
+    print_warning "Ensure your domain DNS is pointing to $PRODUCTION_HOST"
+    
+    conditional_read SETUP_CONFIRM "Continue with HTTPS setup? (y/n): " "n"
+    if [[ ! $SETUP_CONFIRM =~ ^[Yy]$ ]]; then
+        print_status "HTTPS setup cancelled"
+        return 0
+    fi
+    
+    if [ ! -f "deploy_to_ec2.sh" ]; then
+        print_error "deploy_to_ec2.sh script not found!"
+        return 1
+    fi
+    
+    chmod +x deploy_to_ec2.sh
+    print_status "Running HTTPS setup..."
+    ./deploy_to_ec2.sh --key-path "$PRODUCTION_KEY_PATH" --restart-only --setup-ssl
+    
+    if [ $? -eq 0 ]; then
+        print_status "✅ HTTPS setup completed!"
+        print_status "Your backend is now available at:"
+        print_status "  • HTTPS: https://$BACKEND_DOMAIN"
+        print_status "  • HTTP: http://$PRODUCTION_HOST (redirects to HTTPS)"
+    else
+        print_error "❌ HTTPS setup failed!"
+    fi
+}
+
+# Function to deploy to production EC2
+deploy_to_production() {
+    print_header "Deploying to Production EC2 Instance"
+    
+    print_status "Using dedicated deployment script for EC2..."
+    print_status "Target: $PRODUCTION_USER@$PRODUCTION_HOST"
+    
+    # Check if deployment script exists
+    if [ ! -f "deploy_to_ec2.sh" ]; then
+        print_error "deploy_to_ec2.sh script not found!"
+        print_error "Please ensure the EC2 deployment script is in the current directory."
+        return 1
+    fi
+    
+    # Make script executable
+    chmod +x deploy_to_ec2.sh
+    
+    # Ask user for deployment options
+    echo
+    print_status "Deployment Options:"
+    echo "1. Full deployment (HTTP only)"
+    echo "2. Full deployment with HTTPS setup"
+    echo "3. Quick restart (existing deployment)"
+    echo "4. Custom options"
+    echo
+    
+    conditional_read DEPLOY_CHOICE "Choose deployment type [1-4]: " "1"
+    
+    case $DEPLOY_CHOICE in
+        1)
+            print_status "Running full HTTP deployment..."
+            ./deploy_to_ec2.sh --key-path "$PRODUCTION_KEY_PATH"
+            ;;
+        2)
+            print_status "Running full HTTPS deployment..."
+            ./deploy_to_ec2.sh --key-path "$PRODUCTION_KEY_PATH" --setup-ssl
+            ;;
+        3)
+            print_status "Running quick restart..."
+            ./deploy_to_ec2.sh --key-path "$PRODUCTION_KEY_PATH" --restart-only
+            ;;
+        4)
+            print_status "Available options:"
+            echo "  --skip-deps     Skip dependency installation"
+            echo "  --restart-only  Only restart services"
+            echo "  --skip-nginx    Skip Nginx configuration"
+            echo "  --setup-ssl     Setup HTTPS/SSL"
+            echo
+            conditional_read CUSTOM_OPTIONS "Enter custom options: " ""
+            ./deploy_to_ec2.sh --key-path "$PRODUCTION_KEY_PATH" $CUSTOM_OPTIONS
+            ;;
+        *)
+            print_error "Invalid option. Using default full HTTP deployment."
+            ./deploy_to_ec2.sh --key-path "$PRODUCTION_KEY_PATH"
+            ;;
+    esac
+    
+    if [ $? -eq 0 ]; then
+        print_status "✅ Production deployment completed successfully!"
+        print_status "Backend available at: http://$PRODUCTION_HOST"
+        if [ "$DEPLOY_CHOICE" = "2" ]; then
+            print_status "HTTPS available at: https://$BACKEND_DOMAIN"
+        fi
+        print_status "Health check: http://$PRODUCTION_HOST/health/"
+        print_status "API endpoint: http://$PRODUCTION_HOST/api/"
+    else
+        print_error "❌ Production deployment failed!"
+        print_error "Check the deployment script logs for more details."
+    fi
+}
+
+# Function to test database and Redis connections
+test_production_connections() {
+    print_header "Testing Production Infrastructure Connections"
+    
+    # Test PostgreSQL connection
+    print_status "Testing PostgreSQL connection to $DB_HOST:$DB_PORT..."
+    if command -v pg_isready &> /dev/null; then
+        if pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME; then
+            print_status "✅ PostgreSQL connection successful"
+        else
+            print_error "❌ PostgreSQL connection failed"
+        fi
+    else
+        print_warning "pg_isready not available. Install postgresql-client to test connections."
+    fi
+    
+    # Test Redis connection
+    print_status "Testing Redis connection to $REDIS_PRIMARY_HOST:$REDIS_PORT..."
+    if command -v redis-cli &> /dev/null; then
+        if redis-cli -h $REDIS_PRIMARY_HOST -p $REDIS_PORT ping | grep -q PONG; then
+            print_status "✅ Redis primary connection successful"
+        else
+            print_error "❌ Redis primary connection failed"
+        fi
+        
+        # Test Redis replica
+        print_status "Testing Redis replica connection to $REDIS_REPLICA_HOST:$REDIS_PORT..."
+        if redis-cli -h $REDIS_REPLICA_HOST -p $REDIS_PORT ping | grep -q PONG; then
+            print_status "✅ Redis replica connection successful"
+        else
+            print_warning "⚠️  Redis replica connection failed or not accessible"
+        fi
+    else
+        print_warning "redis-cli not available. Install redis-tools to test connections."
+    fi
+    
+    print_status "Connection tests completed"
+}
+
+# Function to setup HTTPS on existing deployment
+setup_production_https() {
+    print_header "Setting up HTTPS for Production Deployment"
+    
+    print_status "This will configure HTTPS/SSL for your existing EC2 deployment"
+    print_warning "Ensure your domain DNS is pointing to $PRODUCTION_HOST"
+    
+    conditional_read SETUP_CONFIRM "Continue with HTTPS setup? (y/n): " "n"
+    if [[ ! $SETUP_CONFIRM =~ ^[Yy]$ ]]; then
+        print_status "HTTPS setup cancelled"
+        return 0
+    fi
+    
+    if [ ! -f "deploy_to_ec2.sh" ]; then
+        print_error "deploy_to_ec2.sh script not found!"
+        return 1
+    fi
+    
+    chmod +x deploy_to_ec2.sh
+    print_status "Running HTTPS setup..."
+    ./deploy_to_ec2.sh --key-path "$PRODUCTION_KEY_PATH" --restart-only --setup-ssl
+    
+    if [ $? -eq 0 ]; then
+        print_status "✅ HTTPS setup completed!"
+        print_status "Your backend is now available at:"
+        print_status "  • HTTPS: https://$BACKEND_DOMAIN"
+        print_status "  • HTTP: http://$PRODUCTION_HOST (redirects to HTTPS)"
+    else
+        print_error "❌ HTTPS setup failed!"
+    fi
+}
+
 # Run RUN_ACTION if provided (moved here so functions are defined)
 if [ -n "$RUN_ACTION" ]; then
-    if [[ "$RUN_ACTION" =~ ^[0-6]$ ]]; then
+    if [[ "$RUN_ACTION" =~ ^[0-9]$ ]]; then
         case $RUN_ACTION in
             1)
                 init_pm2
@@ -609,15 +842,27 @@ if [ -n "$RUN_ACTION" ]; then
                 show_status
                 exit 0
                 ;;
+            7)
+                deploy_to_production
+                exit 0
+                ;;
+            8)
+                test_production_connections
+                exit 0
+                ;;
+            9)
+                setup_production_https
+                exit 0
+                ;;
             0)
                 print_status "Exiting via RUN_ACTION"
                 exit 0
                 ;;
         esac
     else
-        print_warning "RUN_ACTION must be a number 0-6. Ignoring."
+        print_warning "RUN_ACTION must be a number 0-9. Ignoring."
     fi
-}
+fi
 
 # Main execution
 main() {
@@ -627,7 +872,7 @@ main() {
 
     while true; do
         show_menu
-        read -p "Choose an option [0-6]: " choice
+        read -p "Choose an option [0-9]: " choice
         
         case $choice in
             1)
@@ -648,12 +893,21 @@ main() {
             6)
                 show_status
                 ;;
+            7)
+                deploy_to_production
+                ;;
+            8)
+                test_production_connections
+                ;;
+            9)
+                setup_production_https
+                ;;
             0)
                 print_status "Goodbye!"
                 exit 0
                 ;;
             *)
-                print_error "Invalid option. Please choose 0-6."
+                print_error "Invalid option. Please choose 0-9."
                 ;;
         esac
         
@@ -664,4 +918,4 @@ main() {
 }
 
 # Run main function
-main "$@"
+main "$@"main "$@"
