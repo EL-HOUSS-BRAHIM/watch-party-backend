@@ -148,7 +148,6 @@ validate_required_vars() {
     # Check optional but important variables
     local optional_vars=(
         "SENTRY_DSN"
-        "AWS_ACCESS_KEY_ID"
         "GOOGLE_OAUTH_CLIENT_ID"
         "YOUTUBE_API_KEY"
     )
@@ -431,8 +430,6 @@ MEDIA_URL=/media/
 
 # Optional: Third-party Services
 # SENTRY_DSN=
-# AWS_ACCESS_KEY_ID=
-# AWS_SECRET_ACCESS_KEY=
 # GOOGLE_OAUTH_CLIENT_ID=
 # GOOGLE_OAUTH_CLIENT_SECRET=
 # YOUTUBE_API_KEY=

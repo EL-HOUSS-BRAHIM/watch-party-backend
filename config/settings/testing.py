@@ -166,5 +166,3 @@ class DisableMigrations:
 
 # Override any settings that might cause import errors
 USE_S3 = False
-AWS_ACCESS_KEY_ID = ''
-AWS_SECRET_ACCESS_KEY = ''

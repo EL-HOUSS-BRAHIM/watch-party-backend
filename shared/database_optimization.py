@@ -1,8 +1,14 @@
-"""
-Database optimization settings and utilities
-"""
+"""Database optimization settings and utilities."""
 
+import logging
 import os
+from functools import lru_cache
+from typing import Dict, Optional
+from urllib.parse import urlparse, urlunparse
+
+from shared.aws import get_optional_secret
+
+LOGGER = logging.getLogger(__name__)
 
 # Database connection optimization settings
 DATABASE_OPTIMIZATION_SETTINGS = {
@@ -224,9 +230,12 @@ def get_optimized_database_config():
     """
     import dj_database_url
     from pathlib import Path
-    
+
+    secret_payload = _get_all_in_one_credentials()
+    secret_db = _extract_database_settings(secret_payload)
+
     # Check for DATABASE_URL first (used in testing/CI and AWS)
-    database_url = os.environ.get('DATABASE_URL')
+    database_url = os.environ.get('DATABASE_URL') or secret_db.get('url')
     if database_url:
         # Parse the database URL
         config = {
@@ -258,11 +267,11 @@ def get_optimized_database_config():
     config = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DATABASE_NAME', 'watchparty'),
-            'USER': os.environ.get('DATABASE_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DATABASE_PASSWORD', ''),
-            'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
-            'PORT': os.environ.get('DATABASE_PORT', '5432'),
+            'NAME': os.environ.get('DATABASE_NAME') or secret_db.get('name', 'watchparty'),
+            'USER': os.environ.get('DATABASE_USER') or secret_db.get('username', 'postgres'),
+            'PASSWORD': os.environ.get('DATABASE_PASSWORD') or secret_db.get('password', ''),
+            'HOST': os.environ.get('DATABASE_HOST') or secret_db.get('host', 'localhost'),
+            'PORT': os.environ.get('DATABASE_PORT') or str(secret_db.get('port', '5432')),
             **DATABASE_OPTIMIZATION_SETTINGS,
         }
     }
@@ -305,9 +314,14 @@ def get_cache_config():
     """
     Get optimized cache configuration with support for AWS ElastiCache Valkey
     """
-    redis_url = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379')
+    redis_secret = _get_redis_credentials()
+    redis_url = os.environ.get('REDIS_URL') or redis_secret.get('url', 'redis://127.0.0.1:6379')
+    redis_url = _inject_redis_auth(redis_url, redis_secret)
     redis_use_ssl = os.environ.get('REDIS_USE_SSL', 'False').lower() in ('true', '1', 'yes')
-    
+
+    if redis_secret.get('use_ssl') is True:
+        redis_use_ssl = True
+
     # Enhanced Redis settings for AWS ElastiCache with SSL/TLS
     if redis_use_ssl or redis_url.startswith('rediss://'):
         redis_settings = {
@@ -351,3 +365,97 @@ def get_cache_config():
             'TIMEOUT': 300,  # 5 minutes for WebSocket channels
         },
     }
+
+
+@lru_cache(maxsize=1)
+def _get_all_in_one_credentials() -> Optional[Dict[str, Dict]]:
+    secret_name = os.environ.get('ALL_IN_ONE_SECRET_NAME', 'all-in-one-credentials')
+    secret = get_optional_secret(secret_name)
+
+    if secret is None:
+        return None
+
+    LOGGER.debug("Loaded credentials from Secrets Manager: %s", secret_name)
+    return secret
+
+
+@lru_cache(maxsize=1)
+def _get_redis_credentials() -> Dict[str, str]:
+    secret_name = os.environ.get('REDIS_AUTH_SECRET_NAME', 'watch-party-valkey-001-auth-token')
+    redis_secret = get_optional_secret(secret_name) or {}
+
+    if not redis_secret:
+        bundled = _get_all_in_one_credentials() or {}
+        if isinstance(bundled, dict):
+            nested = bundled.get('redis')
+            if isinstance(nested, dict):
+                redis_secret = nested
+            else:
+                redis_secret = {
+                    'url': bundled.get('redis_url'),
+                    'password': bundled.get('redis_password') or bundled.get('redis_token'),
+                    'token': bundled.get('redis_token'),
+                    'username': bundled.get('redis_username'),
+                    'use_ssl': bundled.get('redis_use_ssl'),
+                }
+
+    if isinstance(redis_secret, dict):
+        return {key: value for key, value in redis_secret.items() if value is not None}
+
+    return {}
+
+
+def _extract_database_settings(secret_payload: Optional[Dict[str, Dict]]) -> Dict[str, str]:
+    if not secret_payload or not isinstance(secret_payload, dict):
+        return {}
+
+    if isinstance(secret_payload.get('database'), dict):
+        return secret_payload['database']
+
+    for candidate in ('db', 'db_credentials', 'postgres', 'postgresql'):
+        value = secret_payload.get(candidate)
+        if isinstance(value, dict):
+            return value
+
+    return {
+        'name': secret_payload.get('database_name') or secret_payload.get('name'),
+        'username': secret_payload.get('database_username') or secret_payload.get('username'),
+        'password': secret_payload.get('database_password') or secret_payload.get('password'),
+        'host': secret_payload.get('database_host') or secret_payload.get('host'),
+        'port': secret_payload.get('database_port') or secret_payload.get('port'),
+        'url': secret_payload.get('database_url') or secret_payload.get('url'),
+        'redis': secret_payload.get('redis') if isinstance(secret_payload.get('redis'), dict) else {},
+    }
+
+
+def _inject_redis_auth(redis_url: str, redis_secret: Dict[str, str]) -> str:
+    if not redis_secret:
+        return redis_url
+
+    password = redis_secret.get('password') or redis_secret.get('token') or redis_secret.get('auth_token')
+    username = redis_secret.get('username')
+
+    if not password and not username:
+        return redis_url
+
+    parsed = urlparse(redis_url)
+    if not parsed.hostname:
+        return redis_url
+
+    if parsed.password or parsed.username:
+        return redis_url
+
+    credentials = ''
+    if username and password:
+        credentials = f"{username}:{password}@"
+    elif password:
+        credentials = f":{password}@"
+    elif username:
+        credentials = f"{username}@"
+
+    host = parsed.hostname
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+
+    rebuilt = parsed._replace(netloc=f"{credentials}{host}")
+    return urlunparse(rebuilt)

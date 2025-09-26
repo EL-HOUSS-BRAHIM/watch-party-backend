@@ -147,8 +147,8 @@ class Command(BaseCommand):
             'name': 'default',
             'bucket_name': getattr(settings, 'AWS_STORAGE_BUCKET_NAME', ''),
             'region': getattr(settings, 'AWS_S3_REGION_NAME', 'us-east-1'),
-            'access_key_id': getattr(settings, 'AWS_ACCESS_KEY_ID', ''),
-            'secret_access_key': getattr(settings, 'AWS_SECRET_ACCESS_KEY', ''),
+            'access_key_id': '',  # IAM role provides credentials automatically
+            'secret_access_key': '',
             'cloudfront_domain': getattr(settings, 'AWS_S3_CUSTOM_DOMAIN', ''),
             'use_cloudfront': bool(getattr(settings, 'AWS_S3_CUSTOM_DOMAIN', '')),
             'max_file_size': 5368709120,  # 5GB

@@ -40,11 +40,13 @@ GOOGLE_DRIVE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_SERVICE_ACCOUNT_FILE=/path/to/service_account.json
 
 # AWS S3 Configuration
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_STORAGE_BUCKET_NAME=your_s3_bucket
 AWS_S3_REGION_NAME=us-east-1
 AWS_S3_CUSTOM_DOMAIN=your_cloudfront_domain.cloudfront.net
+
+# Secrets Manager
+# Database/Redis credentials: all-in-one-credentials
+# Valkey token: watch-party-valkey-001-auth-token
 
 # Social OAuth Providers
 GOOGLE_OAUTH_CLIENT_ID=your_google_oauth_client_id
@@ -91,7 +93,7 @@ python manage.py setup_integrations
 ### 4. AWS S3 Setup
 
 1. Create S3 bucket in AWS Console
-2. Create IAM user with S3 permissions
+2. Attach the `MyAppRole` IAM role to your compute resources (EC2, ECS, etc.) and grant it the required S3 permissions (`s3:GetObject`, `s3:PutObject`)
 3. (Optional) Set up CloudFront distribution
 4. Configure CORS policy:
 

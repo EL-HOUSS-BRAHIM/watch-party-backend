@@ -184,8 +184,7 @@ GITHUB_OAUTH_CLIENT_SECRET=your-github-client-secret
 # =============================================================================
 # AWS SETTINGS (OPTIONAL - for S3 storage)
 # =============================================================================
-AWS_ACCESS_KEY_ID=your-aws-access-key
-AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+# Credentials come from the MyAppRole IAM role attached to the runner
 AWS_STORAGE_BUCKET_NAME=your-s3-bucket
 AWS_S3_REGION_NAME=us-east-1
 

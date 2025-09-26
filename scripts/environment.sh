@@ -459,9 +459,6 @@ STATIC_URL=/static/
 # CSRF_COOKIE_SECURE=True
 
 # Third-party services
-# AWS_ACCESS_KEY_ID=your-aws-access-key
-# AWS_SECRET_ACCESS_KEY=your-aws-secret-key
-# AWS_STORAGE_BUCKET_NAME=your-bucket-name
 
 # Social Authentication
 # GOOGLE_OAUTH_CLIENT_ID=your-google-client-id

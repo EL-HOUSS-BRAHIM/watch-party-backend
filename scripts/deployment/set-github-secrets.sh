@@ -79,8 +79,7 @@ declare -A DEPLOYMENT_SECRETS=(
     ["DEFAULT_FROM_EMAIL"]="noreply@brahim-elhouss.me"
     # AWS S3
     ["USE_S3"]="False"
-    ["AWS_ACCESS_KEY_ID"]=""
-    ["AWS_SECRET_ACCESS_KEY"]=""
+    # Credentials provided by MyAppRole IAM role
     ["AWS_STORAGE_BUCKET_NAME"]=""
     ["AWS_S3_REGION_NAME"]="us-east-1"
     # Security
@@ -348,8 +347,6 @@ check_missing_deployment_secrets() {
         "GOOGLE_OAUTH_CLIENT_SECRET"
         "GITHUB_OAUTH_CLIENT_ID"
         "GITHUB_OAUTH_CLIENT_SECRET"
-        "AWS_ACCESS_KEY_ID"
-        "AWS_SECRET_ACCESS_KEY"
     )
     
     for secret in "${optional_secrets[@]}"; do
