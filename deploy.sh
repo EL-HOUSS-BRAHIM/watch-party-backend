@@ -52,44 +52,6 @@ conditional_read() {
     eval $__varname='"$REPLY"'
 }
 
-# If RUN_ACTION is set, execute that action and exit (non-interactive helpers can call functions directly)
-if [ -n "$RUN_ACTION" ]; then
-    if [[ "$RUN_ACTION" =~ ^[0-6]$ ]]; then
-        case $RUN_ACTION in
-            1)
-                init_pm2
-                exit 0
-                ;;
-            2)
-                install_nginx_http
-                exit 0
-                ;;
-            3)
-                install_nginx_https
-                exit 0
-                ;;
-            4)
-                test_nginx_config
-                exit 0
-                ;;
-            5)
-                stop_services
-                exit 0
-                ;;
-            6)
-                show_status
-                exit 0
-                ;;
-            0)
-                print_status "Exiting via RUN_ACTION"
-                exit 0
-                ;;
-        esac
-    else
-        print_warning "RUN_ACTION must be a number 0-6. Ignoring."
-    fi
-fi
-
 # Function to print colored output
 print_status() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -619,10 +581,50 @@ show_menu() {
     echo
 }
 
+# Run RUN_ACTION if provided (moved here so functions are defined)
+if [ -n "$RUN_ACTION" ]; then
+    if [[ "$RUN_ACTION" =~ ^[0-6]$ ]]; then
+        case $RUN_ACTION in
+            1)
+                init_pm2
+                exit 0
+                ;;
+            2)
+                install_nginx_http
+                exit 0
+                ;;
+            3)
+                install_nginx_https
+                exit 0
+                ;;
+            4)
+                test_nginx_config
+                exit 0
+                ;;
+            5)
+                stop_services
+                exit 0
+                ;;
+            6)
+                show_status
+                exit 0
+                ;;
+            0)
+                print_status "Exiting via RUN_ACTION"
+                exit 0
+                ;;
+        esac
+    else
+        print_warning "RUN_ACTION must be a number 0-6. Ignoring."
+    fi
+}
+
 # Main execution
 main() {
     check_root
     
+    # Note: RUN_ACTION is evaluated later (after all functions are declared) to allow non-interactive execution
+
     while true; do
         show_menu
         read -p "Choose an option [0-6]: " choice
