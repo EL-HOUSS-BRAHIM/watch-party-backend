@@ -113,6 +113,9 @@ htmlcov/
 # SSL certificates
 ssl_certs/
 
+# SSH keys (do not commit private keys)
+.ssh/
+
 # Old structure (to be removed)
 watchparty/
 middleware/

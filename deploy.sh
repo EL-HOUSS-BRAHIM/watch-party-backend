@@ -26,6 +26,70 @@ NGINX_CONFIG_NAME="watchparty-backend"
 SSL_CERT_PATH="/etc/ssl/certs"
 SSL_KEY_PATH="/etc/ssl/private"
 
+# Non-interactive behavior: set AUTO_CONFIRM=1 to auto-answer prompts with sensible defaults.
+# Set RUN_ACTION to a number 0-6 to run a specific menu action non-interactively and exit.
+AUTO_CONFIRM=${AUTO_CONFIRM:-0}
+RUN_ACTION=${RUN_ACTION:-}
+
+# Helper to conditionally prompt (uses AUTO_CONFIRM)
+conditional_read() {
+    # Usage: conditional_read varname prompt default
+    local __varname="$1"
+    local __prompt="$2"
+    local __default="$3"
+
+    if [ "$AUTO_CONFIRM" -eq 1 ]; then
+        # Set REPLY to default (if provided) otherwise 'y' for yes-like prompts
+        if [ -z "$__default" ]; then
+            REPLY='y'
+        else
+            REPLY="$__default"
+        fi
+    else
+        read -p "$__prompt" -n 1 -r
+        echo
+    fi
+    eval $__varname='"$REPLY"'
+}
+
+# If RUN_ACTION is set, execute that action and exit (non-interactive helpers can call functions directly)
+if [ -n "$RUN_ACTION" ]; then
+    if [[ "$RUN_ACTION" =~ ^[0-6]$ ]]; then
+        case $RUN_ACTION in
+            1)
+                init_pm2
+                exit 0
+                ;;
+            2)
+                install_nginx_http
+                exit 0
+                ;;
+            3)
+                install_nginx_https
+                exit 0
+                ;;
+            4)
+                test_nginx_config
+                exit 0
+                ;;
+            5)
+                stop_services
+                exit 0
+                ;;
+            6)
+                show_status
+                exit 0
+                ;;
+            0)
+                print_status "Exiting via RUN_ACTION"
+                exit 0
+                ;;
+        esac
+    else
+        print_warning "RUN_ACTION must be a number 0-6. Ignoring."
+    fi
+fi
+
 # Function to print colored output
 print_status() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -340,8 +404,7 @@ EOF
     
     # Ask about SSL setup
     echo
-    read -p "Do you want to set up SSL certificates now? (y/n): " -n 1 -r
-    echo
+    conditional_read REPLY "Do you want to set up SSL certificates now? (y/n): " 'n'
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         setup_ssl_prompt
     fi
@@ -452,9 +515,8 @@ stop_services() {
     
     # Stop PostgreSQL if running locally
     if systemctl is-active --quiet postgresql; then
-        print_warning "PostgreSQL is running. Do you want to stop it? (y/n)"
-        read -p "Stop PostgreSQL? " -n 1 -r
-        echo
+        print_warning "PostgreSQL is running."
+        conditional_read REPLY "Stop PostgreSQL? (y/n): " 'n'
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             systemctl stop postgresql
             print_status "PostgreSQL stopped"
@@ -483,7 +545,7 @@ test_nginx_config() {
             print_warning "⚠️  Backend configuration exists but is not enabled"
         fi
         
-        if systemctl is-active --quiet nginx; then
+        if systemctl is_active --quiet nginx; then
             print_status "✅ Nginx service is running"
         else
             print_warning "⚠️  Nginx service is not running"
