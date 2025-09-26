@@ -24,7 +24,7 @@
 | Channels | CHANNEL_LAYERS_CONFIG_HOSTS | Redis layer URL | Secrets Manager | Yes |
 | Email | EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL | SMTP | Secrets Manager / SSM | Optional |
 | Monitoring | SENTRY_DSN | Sentry DSN | Secrets Manager / GitHub | Optional |
-| Storage | AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME | S3 media (if enabled) | Use IAM role or Secrets Manager | Optional |
+| Storage | AWS_STORAGE_BUCKET_NAME | S3 media (if enabled) | IAM role (MyAppRole) | Optional |
 | Social / APIs | GOOGLE_OAUTH2_CLIENT_ID, GOOGLE_OAUTH2_CLIENT_SECRET, YOUTUBE_API_KEY, TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET | Third party APIs | Secrets Manager | As used |
 | Security | RATE_LIMIT_* (if dynamic), any API tokens | Runtime config | SSM | Optional |
 | Deployment | SSH_PRIVATE_KEY | SSH to server (only if push model) | GitHub Secrets | Yes (if used) |
@@ -52,6 +52,11 @@ Recommended single JSON secret (example key: `watchparty/production/core`):
 }
 ```
 Additional secrets (API keys) can live in `watchparty/production/integrations`.
+
+### Standard Secret Names
+
+- `all-in-one-credentials` – contains database connection details and related service URLs.
+- `watch-party-valkey-001-auth-token` – stores the Valkey/Redis authentication token when one is required.
 
 ### Naming Convention
 ```

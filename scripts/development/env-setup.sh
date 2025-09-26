@@ -354,8 +354,7 @@ STRIPE_SECRET_KEY=sk_test_placeholder
 STRIPE_WEBHOOK_SECRET=whsec_placeholder
 
 # AWS S3 Configuration (for file storage)
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
+# Credentials are supplied by the MyAppRole IAM role in AWS
 AWS_STORAGE_BUCKET_NAME=
 AWS_S3_REGION_NAME=us-east-1
 AWS_S3_CUSTOM_DOMAIN=
@@ -560,8 +559,7 @@ STRIPE_SECRET_KEY=sk_live_your_secret_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
 
 # AWS S3 Configuration
-AWS_ACCESS_KEY_ID=your_aws_access_key_id
-AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+# Credentials are provided via the MyAppRole IAM role
 AWS_STORAGE_BUCKET_NAME=watchparty-prod-media
 AWS_S3_REGION_NAME=us-east-1
 AWS_S3_CUSTOM_DOMAIN=$backend_domain

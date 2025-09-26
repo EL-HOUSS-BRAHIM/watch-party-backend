@@ -13,8 +13,9 @@ import tempfile
 import logging
 import json
 from typing import Optional, Dict, Any
-import boto3
 from botocore.exceptions import ClientError
+
+from shared.aws import get_boto3_session
 
 from .models import Video
 from apps.analytics.models import AnalyticsEvent
@@ -246,10 +247,8 @@ def upload_thumbnail_to_storage(thumbnail_path: str) -> Optional[str]:
 def upload_to_s3(file_path: str, s3_key: str) -> Optional[str]:
     """Upload file to AWS S3"""
     try:
-        s3_client = boto3.client(
+        s3_client = get_boto3_session().client(
             's3',
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             region_name=settings.AWS_S3_REGION_NAME
         )
         
