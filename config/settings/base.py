@@ -31,6 +31,8 @@ THIRD_PARTY_APPS = [
     'django_filters',
     'channels',
     'drf_spectacular',
+    'drf_spectacular_sidecar',
+    'django_celery_beat',
 ]
 
 LOCAL_APPS = [
@@ -418,22 +420,22 @@ SPECTACULAR_SETTINGS = {
     },
     'SORT_OPERATIONS': True,
     'DISABLE_ERRORS_AND_WARNINGS': False,
-    'ENUM_NAME_OVERRIDES': {
-        'ValidationErrorEnum': 'shared.exceptions.ValidationError',
-        # Status field enum overrides
-        'StatusAc5Enum': 'WatchPartyStatusEnum',
-        'Status8e4Enum': 'SubscriptionStatusEnum', 
-        'Status97dEnum': 'BillingInvoiceStatusEnum',
-        'Status9f9Enum': 'EventStatusEnum',
-        # Priority field enum overrides
-        'Priority5f3Enum': 'NotificationPriorityEnum',
-        'PriorityC93Enum': 'SupportTicketPriorityEnum',
-        # Report type enum override
-        'ReportTypeBe8Enum': 'ContentReportTypeEnum',
-    },
-    'POSTPROCESSING_HOOKS': [
-        'drf_spectacular.hooks.postprocess_schema_enums'
-    ],
+#     'ENUM_NAME_OVERRIDES': {
+#         'ValidationErrorEnum': 'shared.exceptions.ValidationError',
+#         # Status field enum overrides
+#         'StatusAc5Enum': 'WatchPartyStatusEnum',
+#         'Status8e4Enum': 'SubscriptionStatusEnum', 
+#         'Status97dEnum': 'BillingInvoiceStatusEnum',
+#         'Status9f9Enum': 'EventStatusEnum',
+#         # Priority field enum overrides
+#         'Priority5f3Enum': 'NotificationPriorityEnum',
+#         'PriorityC93Enum': 'SupportTicketPriorityEnum',
+#         # Report type enum override
+#         'ReportTypeBe8Enum': 'ContentReportTypeEnum',
+#     },
+#     '#POSTPROCESSING_HOOKS': [
+#         'drf_spectacular.hooks.postprocess_schema_enums'
+#     ],
     'PREPROCESSING_HOOKS': [
         'drf_spectacular.hooks.preprocess_exclude_path_format'
     ],
