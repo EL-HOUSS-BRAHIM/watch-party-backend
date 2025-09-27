@@ -1,38 +1,200 @@
-name: Deploy to EC2
+name: Deploy to Production
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - master
+    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment even if no changes'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
 jobs:
   deploy:
-    name: Deploy via SSH
+    name: Deploy to Production Server
     runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[skip deploy]') == false || github.event.inputs.force_deploy == 'true'
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2  # Need at least 2 commits to check for changes
 
-      - name: Setup SSH and run remote deploy
-        uses: appleboy/ssh-action@v0.1.9
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
-            set -e
-            mkdir -p ${{ secrets.REMOTE_DIR }}
-            cd ${{ secrets.REMOTE_DIR }}
-            if [ -d .git ]; then
-              git fetch --all --prune
-              git reset --hard origin/${{ github.ref_name }}
-              git clean -fd
-            else
-              git clone --depth 1 -b ${GITHUB_REF_NAME:-master} https://github.com/${{ github.repository }} .
+    - name: Check for deployment changes
+      id: changes
+      run: |
+        if [[ "${{ github.event.inputs.force_deploy }}" == "true" ]]; then
+          echo "deployment_needed=true" >> $GITHUB_OUTPUT
+          echo "reason=Forced deployment" >> $GITHUB_OUTPUT
+        elif git diff --name-only HEAD~1 HEAD | grep -E '\.(py|js|sh|yml|yaml|txt|json)$'; then
+          echo "deployment_needed=true" >> $GITHUB_OUTPUT
+          echo "reason=Code changes detected" >> $GITHUB_OUTPUT
+        else
+          echo "deployment_needed=false" >> $GITHUB_OUTPUT
+          echo "reason=No deployment files changed" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Setup SSH
+      if: steps.changes.outputs.deployment_needed == 'true'
+      run: |
+        mkdir -p ~/.ssh
+        echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H $DEPLOY_HOST >> ~/.ssh/known_hosts
+
+    - name: Pre-deployment health check
+      if: steps.changes.outputs.deployment_needed == 'true'
+      run: |
+        echo "🔍 Checking server connectivity..."
+        ssh -i ~/.ssh/id_rsa $DEPLOY_USER@$DEPLOY_HOST "echo 'Server connection successful'"
+        
+        echo "📊 Checking server resources..."
+        ssh -i ~/.ssh/id_rsa $DEPLOY_USER@$DEPLOY_HOST << 'EOF'
+        echo "=== Memory Usage ==="
+        free -h
+        echo "=== Disk Usage ==="
+        df -h /
+        echo "=== Current PM2 Status ==="
+        pm2 status || echo "PM2 not running or no processes"
+        EOF
+
+    - name: Deploy to server
+      if: steps.changes.outputs.deployment_needed == 'true'
+      run: |
+        echo "🚀 Starting deployment..."
+        
+        ssh -i ~/.ssh/id_rsa $DEPLOY_USER@$DEPLOY_HOST << 'EOF'
+        set -euo pipefail
+        
+        SERVER_PATH="/opt/watch-party-backend"
+        BRANCH="master"
+        
+        log_info() {
+          echo -e "\e[34m[INFO]\e[0m $1"
+        }
+        
+        log_success() {
+          echo -e "\e[32m[SUCCESS]\e[0m $1"
+        }
+        
+        log_error() {
+          echo -e "\e[31m[ERROR]\e[0m $1" >&2
+        }
+        
+        # Navigate to project directory
+        cd "$SERVER_PATH"
+        
+        # Backup current commit hash
+        echo "Current commit: $(git rev-parse HEAD)" > /tmp/pre_deploy_commit.txt
+        
+        # Git operations
+        log_info "Updating code from Git repository..."
+        git fetch origin
+        git reset --hard "origin/$BRANCH"
+        git clean -fd
+        
+        # Install/update dependencies
+        log_info "Installing Python dependencies..."
+        pip install -r requirements/production.txt
+        
+        # Run database migrations
+        log_info "Running database migrations..."
+        python manage.py migrate --noinput
+        
+        # Collect static files
+        log_info "Collecting static files..."
+        python manage.py collectstatic --noinput
+        
+        # Update permissions
+        log_info "Setting file permissions..."
+        chmod +x start-*.sh
+        chmod 644 ecosystem.config.js
+        
+        # Restart services via PM2
+        log_info "Restarting services..."
+        pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
+        pm2 save
+        
+        # Health check with retry
+        log_info "Performing health check..."
+        sleep 15  # Give services time to start
+        
+        # Check PM2 status
+        pm2 status
+        
+        # Health check with retries
+        for i in {1..5}; do
+          if curl -f -s -o /dev/null "http://localhost:8000/health/"; then
+            log_success "Django health check passed (attempt $i)"
+            break
+          else
+            if [[ $i -eq 5 ]]; then
+              log_error "Django health check failed after 5 attempts"
+              exit 1
             fi
-            # Run deploy script as root
-            export AUTO_CONFIRM=1
-            export RUN_ACTION=${{ secrets.RUN_ACTION || '1' }}
-            sudo bash deploy.sh
+            log_info "Health check failed, retrying in 10 seconds... (attempt $i/5)"
+            sleep 10
+          fi
+        done
+        
+        # Check if API docs are accessible
+        if curl -f -s -o /dev/null "http://localhost:8000/api/docs/"; then
+          log_success "API documentation accessible"
+        else
+          log_error "API documentation not accessible"
+        fi
+        
+        log_success "Deployment completed successfully!"
+        echo "New commit: $(git rev-parse HEAD)"
+        EOF
+
+    - name: Post-deployment verification
+      if: steps.changes.outputs.deployment_needed == 'true'
+      run: |
+        echo "🔍 Verifying deployment..."
+        
+        # Check HTTPS endpoints
+        API_URL="https://be-watch-party.brahim-elhouss.me"
+        
+        echo "Checking health endpoint..."
+        if curl -f -s -o /dev/null "$API_URL/health/"; then
+          echo "✅ Health check passed: $API_URL/health/"
+        else
+          echo "❌ Health check failed"
+          exit 1
+        fi
+        
+        echo "Checking API documentation..."
+        if curl -f -s -o /dev/null "$API_URL/api/docs/"; then
+          echo "✅ API docs accessible: $API_URL/api/docs/"
+        else
+          echo "⚠️ API docs check failed"
+        fi
+        
+        echo "🎉 Deployment verification completed!"
+
+    - name: Notify deployment status
+      if: always() && steps.changes.outputs.deployment_needed == 'true'
+      run: |
+        if [[ "${{ job.status }}" == "success" ]]; then
+          echo "✅ Deployment successful!"
+          echo "🌐 API: https://be-watch-party.brahim-elhouss.me/api/docs/"
+          echo "💚 Health: https://be-watch-party.brahim-elhouss.me/health/"
+        else
+          echo "❌ Deployment failed!"
+          echo "Check the logs above for details."
+        fi
+
+    - name: Skip deployment notification
+      if: steps.changes.outputs.deployment_needed == 'false'
+      run: |
+        echo "ℹ️ Skipping deployment: ${{ steps.changes.outputs.reason }}"
+        echo "To force deployment, use workflow_dispatch with force_deploy=true"
