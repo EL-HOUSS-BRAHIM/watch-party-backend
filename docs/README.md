@@ -13,6 +13,12 @@ Welcome to the Watch Party Backend documentation. This directory contains compre
 - **[DEPLOYMENT.md](deployment/DEPLOYMENT.md)** - Complete deployment guide
 - **[GITHUB_ACTIONS_UPDATE.md](deployment/GITHUB_ACTIONS_UPDATE.md)** - CI/CD and GitHub Actions setup
 
+### 🧩 Frontend Documentation (`/frontend/`)
+- **[Next.js Pages & Components](frontend/nextjs-pages-and-components.md)** - Required routes and shared UI inventory
+- **[API Integration Guide](frontend/api-integration-guide.md)** - How the frontend communicates with the backend
+- **[User & Admin Scenarios](frontend/user-admin-scenarios.md)** - End-to-end experience flows
+- **[Technology Alignment](frontend/technology-alignment.md)** - How to use backend tech from Next.js
+
 ### 🛠️ Development Documentation (`/development/`)
 - **[ERD.md](development/ERD.md)** - Entity Relationship Diagram and database schema
 - **[integrations.md](development/integrations.md)** - Third-party integrations guide
