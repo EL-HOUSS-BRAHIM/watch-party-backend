@@ -59,16 +59,16 @@ export const apiClient = {
 | Party Invitations | `POST /api/parties/{partyId}/invite/` | Send invites; expect `emails` array.
 | Party Analytics | `GET /api/analytics/parties/{partyId}/` | Power the dashboard analytics page.
 | Realtime Sync | WebSocket `ws/party/{partyId}/` | Join with JWT in query string `?token=` or `Authorization` header via protocols.
-| Chat Threads | `GET /api/chat/threads/` | Cursor pagination; use `MessagingThread` component.
-| Messages | `GET /api/chat/threads/{threadId}/messages/` & `POST` for sending.
+| Conversations | `GET /api/messaging/conversations/` | Cursor pagination; use `MessagingThread` component.
+| Party Chat Messages | `GET /api/chat/{partyId}/messages/` & `POST /api/chat/{partyId}/messages/send/` for sending.
 | Videos | `GET /api/videos/` | Upload uses multipart `POST /api/videos/upload/`; track progress with `VideoProcessingJob` status polling (`/api/videos/{id}/processing/`).
 | Events | `GET /api/events/` | Filter with `?from`, `?to`, `?type` for calendar.
 | Notifications | `GET /api/notifications/` | Use `PATCH /api/notifications/{id}/read/` to mark as read.
-| Store | `GET /api/store/products/` | Purchases via `POST /api/store/checkout/`.
+| Store | `GET /api/store/items/` | Purchases via `POST /api/store/purchase/`.
 | Billing | `GET /api/billing/subscription/` | Manage plan, `POST /api/billing/upgrade/`.
-| Support | `POST /api/support/tickets/` | Attachments via multipart; follow-up updates `POST /api/support/tickets/{id}/reply/`.
+| Support | `POST /api/support/tickets/` | Attachments via multipart; follow-up updates `POST /api/support/tickets/{id}/messages/`.
 | Admin Users | `GET /api/admin/users/` | Provide `role`, `status`, `search` filters.
-| Moderation | `GET /api/moderation/reports/` & `POST /api/moderation/reports/{id}/resolve/`.
+| Moderation | `GET /api/moderation/reports/` & `POST /api/moderation/admin/reports/{id}/resolve/`.
 
 Refer to serializers and viewsets under `apps/*/api` for payload shape.
 
