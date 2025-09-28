@@ -17,7 +17,7 @@ This reference explains how the Next.js frontend should leverage backend technol
 ## Django Channels WebSockets
 
 - Channels routes defined in [`apps/chat/routing.py`](../../apps/chat/routing.py), [`apps/interactive/routing.py`](../../apps/interactive/routing.py), and [`apps/parties/routing.py`](../../apps/parties/routing.py).
-- Use native `WebSocket` API or libraries like `@microsoft/signalr`-style wrappers to connect, passing JWT via query string or custom header `Sec-WebSocket-Protocol: Bearer,<token>`.
+- Use the native `WebSocket` API or compatible libraries (e.g., `ws`, `@tanstack/query`) to connect, passing JWT via query string or custom header `Sec-WebSocket-Protocol: Bearer,<token>`.
 - Implement exponential backoff reconnection and presence tracking aligned with `PartyConsumer` events.
 
 ## Celery & Async Tasks
