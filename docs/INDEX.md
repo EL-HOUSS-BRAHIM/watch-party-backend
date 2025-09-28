@@ -38,6 +38,12 @@ This directory contains all organized documentation for the Watch Party Backend 
 - Contributing guidelines
 - Code standards
 
+### 🧩 **frontend/** - Next.js Implementation Guides
+- [`nextjs-pages-and-components.md`](frontend/nextjs-pages-and-components.md) - Pages, layouts, and shared components
+- [`api-integration-guide.md`](frontend/api-integration-guide.md) - REST and realtime integration patterns
+- [`user-admin-scenarios.md`](frontend/user-admin-scenarios.md) - User journeys and admin workflows
+- [`technology-alignment.md`](frontend/technology-alignment.md) - Mapping backend tech to frontend usage
+
 ### 🔍 **maintenance/** - System Maintenance
 - System monitoring
 - Backup procedures
